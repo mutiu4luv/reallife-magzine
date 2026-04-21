@@ -4,7 +4,7 @@ const Landingpage = () => {
   return (
     <div>
       <Hero />
-      <Reallife />
+      <Reallife />  
     </div>
   )
 }

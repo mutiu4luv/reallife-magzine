@@ -14,28 +14,33 @@ const Hero: React.FC = () => {
         display: "flex",
         alignItems: "center",
         color: "#fff",
+        backgroundColor: "#0a1929", // fallback color for empty spaces
         backgroundImage: `
           linear-gradient(rgba(10, 25, 41, 0.85), rgba(10, 25, 41, 0.85)),
           url(${heroImage})
         `,
-        backgroundSize: "cover",
+        backgroundRepeat: "no-repeat",
         backgroundPosition: "center",
+        backgroundSize: {
+          xs: "contain", // ✅ show full image on mobile
+          md: "cover",   // ✅ fill screen nicely on larger screens
+        },
         px: 2,
       }}
     >
       <Container maxWidth="lg">
         <Stack spacing={4} sx={{ maxWidth: "800px" }}>
-        <Typography
-  variant="h2"
-  sx={{
-    fontWeight: 800,
-    fontSize: { xs: "2.3rem", md: "3.8rem" },
-    lineHeight: 1.2,
-    letterSpacing: "-0.02em",
-  }}
->
-  Telling Africa’s Stories. Reaching the World.
-</Typography>
+          <Typography
+            variant="h2"
+            sx={{
+              fontWeight: 800,
+              fontSize: { xs: "2.3rem", md: "3.8rem" },
+              lineHeight: 1.2,
+              letterSpacing: "-0.02em",
+            }}
+          >
+            Telling Africa’s Stories. Reaching the World.
+          </Typography>
 
           <Typography
             variant="h6"
@@ -46,7 +51,8 @@ const Hero: React.FC = () => {
               fontSize: { xs: "1rem", md: "1.15rem" },
             }}
           >
-       RealityLife Magazine  Amplifying voices, shaping narratives, and documenting today for tomorrow’s legacy.
+            RealityLife Magazine — Amplifying voices, shaping narratives, and
+            documenting today for tomorrow’s legacy.
           </Typography>
 
           <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
