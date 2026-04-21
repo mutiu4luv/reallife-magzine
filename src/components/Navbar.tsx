@@ -54,8 +54,8 @@ const Navbar: React.FC = () => {
             alt="RealityLife Magazine Logo"
             onClick={() => navigate("/")}
             sx={{
-              height: { xs: 70, md: 80 }, // ✅ bigger on mobile
-              width: { xs: 140, md: 180 }, // ✅ better visibility
+              height: { xs: 70, md: 80 },
+              width: { xs: 140, md: 180 },
               objectFit: "contain",
               cursor: "pointer",
             }}
@@ -105,7 +105,7 @@ const Navbar: React.FC = () => {
           sx={{
             width: 260,
             height: "100%",
-            bgcolor: "#ffffff", // ✅ white background
+            bgcolor: "#fff",
             pt: 4,
           }}
         >
