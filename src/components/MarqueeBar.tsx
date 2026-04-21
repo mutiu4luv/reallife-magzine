@@ -1,6 +1,9 @@
 import { Box, Typography } from "@mui/material";
 
 const MarqueeBar: React.FC = () => {
+  const text =
+    "REAL LIFE MAGAZINE • REAL LIFE MAGAZINE • REAL LIFE MAGAZINE • ";
+
   return (
     <Box
       sx={{
@@ -13,17 +16,27 @@ const MarqueeBar: React.FC = () => {
     >
       <Box
         sx={{
+          display: "flex",
           whiteSpace: "nowrap",
-          animation: "marquee 18s linear infinite",
+          animation: "marquee 20s linear infinite",
           "@keyframes marquee": {
-            from: { transform: "translateX(100%)" },
-            to: { transform: "translateX(-100%)" },
+            "0%": { transform: "translateX(0%)" },
+            "100%": { transform: "translateX(-50%)" },
           },
         }}
       >
-        <Typography sx={{ fontWeight: "bold", letterSpacing: "3px", px: 4 }}>
-          REAL LIFE MAGAZINE • REAL LIFE MAGAZINE • REAL LIFE MAGAZINE •
-          REAL LIFE MAGAZINE • REAL LIFE MAGAZINE
+        {/* First copy */}
+        <Typography
+          sx={{ fontWeight: "bold", letterSpacing: "3px", px: 4 }}
+        >
+          {text}
+        </Typography>
+
+        {/* Second copy (required for seamless loop) */}
+        <Typography
+          sx={{ fontWeight: "bold", letterSpacing: "3px", px: 4 }}
+        >
+          {text}
         </Typography>
       </Box>
     </Box>
