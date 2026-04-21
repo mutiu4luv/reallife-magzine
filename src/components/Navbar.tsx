@@ -25,33 +25,23 @@ const navLinks = [
 ];
 
 const Navbar: React.FC = () => {
-  const [open, setOpen] = useState<boolean>(false);
+  const [open, setOpen] = useState(false);
   const navigate = useNavigate();
 
   return (
     <>
-      <AppBar
-        position="static"
-        sx={{
-          backgroundColor: "#000",
-          boxShadow: "none",
-          borderBottom: "1px solid rgba(255,215,0,0.2)",
-        }}
-      >
+      <AppBar position="static" sx={{ bgcolor: "#000", boxShadow: "none" }}>
         <Toolbar
           sx={{
             display: "flex",
             justifyContent: "space-between",
-            alignItems: "center",
-            px: { xs: 2, md: 6 },
             minHeight: { xs: 80, md: 100 },
           }}
         >
-          {/* Logo */}
           <Box
             component="img"
             src={heroImage}
-            alt="RealityLife Magazine Logo"
+            alt="Logo"
             onClick={() => navigate("/")}
             sx={{
               height: { xs: 70, md: 80 },
@@ -61,35 +51,18 @@ const Navbar: React.FC = () => {
             }}
           />
 
-          {/* Desktop Links */}
-          <Box
-            sx={{
-              display: { xs: "none", md: "flex" },
-              gap: 4,
-              alignItems: "center",
-            }}
-          >
+          <Box sx={{ display: { xs: "none", md: "flex" }, gap: 4 }}>
             {navLinks.map((link) => (
               <Button
                 key={link.label}
                 onClick={() => navigate(link.path)}
-                sx={{
-                  textTransform: "none",
-                  fontWeight: 500,
-                  fontSize: "1rem",
-                  color: "#fff",
-                  "&:hover": {
-                    color: "#FFD700",
-                    backgroundColor: "transparent",
-                  },
-                }}
+                sx={{ color: "#fff", "&:hover": { color: "#FFD700" } }}
               >
                 {link.label}
               </Button>
             ))}
           </Box>
 
-          {/* Mobile Menu Icon */}
           <IconButton
             sx={{ display: { xs: "block", md: "none" }, color: "#fff" }}
             onClick={() => setOpen(true)}
@@ -99,16 +72,8 @@ const Navbar: React.FC = () => {
         </Toolbar>
       </AppBar>
 
-      {/* Mobile Drawer */}
       <Drawer anchor="right" open={open} onClose={() => setOpen(false)}>
-        <Box
-          sx={{
-            width: 260,
-            height: "100%",
-            bgcolor: "#fff",
-            pt: 4,
-          }}
-        >
+        <Box sx={{ width: 260, bgcolor: "#fff", height: "100%", pt: 4 }}>
           <List>
             {navLinks.map((link) => (
               <ListItem key={link.label} disablePadding>
@@ -120,10 +85,9 @@ const Navbar: React.FC = () => {
                 >
                   <ListItemText
                     primary={link.label}
-                    primaryTypographyProps={{
-                      sx: {
-                        color: "#000",
-                        fontWeight: 600,
+                    slotProps={{
+                      primary: {
+                        sx: { color: "#000", fontWeight: 600 },
                       },
                     }}
                   />

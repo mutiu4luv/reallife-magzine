@@ -1,40 +1,33 @@
-import React from "react";
 import { Box, Typography } from "@mui/material";
 
-const MarqueeBar = () => {
+const MarqueeBar: React.FC = () => {
   return (
     <Box
       sx={{
         height: "10vh",
-        backgroundColor: "gold",
+        bgcolor: "gold",
         display: "flex",
         alignItems: "center",
         overflow: "hidden",
-        position: "relative",
       }}
     >
       <Box
         sx={{
-          display: "inline-block",
           whiteSpace: "nowrap",
           animation: "marquee 18s linear infinite",
           "@keyframes marquee": {
-            "0%": { transform: "translateX(0%)" },
-            "100%": { transform: "translateX(-50%)" },
+            from: { transform: "translateX(100%)" },
+            to: { transform: "translateX(-100%)" },
           },
         }}
       >
-        <Typography
-          variant="h5"
-          sx={{ fontWeight: "bold", letterSpacing: "3px", px: 4 }}
-        >
+        <Typography sx={{ fontWeight: "bold", letterSpacing: "3px", px: 4 }}>
           REAL LIFE MAGAZINE • REAL LIFE MAGAZINE • REAL LIFE MAGAZINE •
-          REAL LIFE MAGAZINE • REAL LIFE MAGAZINE •
-          REAL LIFE MAGAZINE • REAL LIFE MAGAZINE •
+          REAL LIFE MAGAZINE • REAL LIFE MAGAZINE
         </Typography>
       </Box>
     </Box>
   );
 };
 
-export default MarqueeBar;    
+export default MarqueeBar;
