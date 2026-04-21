@@ -8,6 +8,8 @@ import {
   Button,
 } from "@mui/material";
 import { motion } from "framer-motion";
+import heroPng from "../assets/hero.png";
+import heroJpeg from "../assets/hero.jpeg"
 
 const gold = "#A67C1B";
 
@@ -20,19 +22,19 @@ type Testimony = {
 const testimonies: Testimony[] = [
   {
     name: "Bonny Christian",
-    image: "/assets/hero.jpeg",
+    image: heroPng, 
     message:
       "RealityLife Magazine tells stories that truly matter. Every edition leaves me inspired. The depth of storytelling and authenticity is rare and powerful.",
   },
   {
     name: "Ifeanyi Stanley",
-    image: "/hero.jpeg",
+    image: heroJpeg,
     message:
       "A powerful voice for culture and leadership. I always look forward to new releases because of the consistency and quality.",
   },
   {
     name: "Grace Obi",
-    image: "/assets/hero.jpeg",
+    image: heroJpeg,
     message:
       "This platform bridges knowledge, inspiration, and authentic storytelling beautifully. It has changed how I consume meaningful content online.",
   },
@@ -54,7 +56,6 @@ const TestimonyCard: React.FC<{
   item: Testimony;
   index: number;
 }> = ({ item, index }) => {
-  // Local state ensures the button only functions for this specific card
   const [expanded, setExpanded] = useState(false);
 
   const directions = [
@@ -105,7 +106,7 @@ const TestimonyCard: React.FC<{
         <CardContent sx={{ p: 1, textAlign: "left", flexGrow: 1 }}>
           <Box sx={{ textAlign: 'center', mb: 2 }}>
             <Avatar
-              src={item.image}
+              src={item.image} // Grabs the string path from the array
               alt={item.name}
               sx={{
                 width: 70,
@@ -113,8 +114,12 @@ const TestimonyCard: React.FC<{
                 mx: "auto",
                 mb: 2,
                 border: `2px solid ${gold}`,
+                bgcolor: "#333", // Fallback color if image is missing
               }}
-            />
+            >
+              {/* This letter shows up only if the image fails to load */}
+              {item.name.charAt(0)}
+            </Avatar>
             <Typography
               variant="subtitle1"
               sx={{ fontWeight: 700, color: gold }}
@@ -122,7 +127,6 @@ const TestimonyCard: React.FC<{
               {item.name}
             </Typography>
 
-            {/* Moving Gold Line Container */}
             <Box 
               sx={{ 
                 width: "60px", 
@@ -223,7 +227,6 @@ const TestimonySection: React.FC = () => {
         >
           What Our Readers Say
         </Typography>
-        {/* Animated Headline Underline */}
         <Box sx={{ width: "100%", height: "4px", bgcolor: "rgba(166,124,27,0.2)", borderRadius: "2px", overflow: 'hidden', position: 'relative' }}>
             <motion.div 
                 animate={{ x: ["-100%", "100%"] }}
