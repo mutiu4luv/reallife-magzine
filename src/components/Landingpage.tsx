@@ -5,6 +5,7 @@ import BenefitSection from "./BenefitSEction"
 import Testimoney from "./Testimoney"
 import PhotoGallery from "./PhotoGallery"
 import AboutSection from "./AboutSection"
+import InterviewSection from "./InterviewSection"
 const Landingpage = () => {
   return (
     <div>
@@ -15,6 +16,7 @@ const Landingpage = () => {
       <Testimoney />
       <PhotoGallery />
       <AboutSection />
+      <InterviewSection />
     </div>
   )
 }
