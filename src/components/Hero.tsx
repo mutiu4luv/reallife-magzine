@@ -51,7 +51,7 @@ const Hero: React.FC = () => {
               fontSize: { xs: "1rem", md: "1.15rem" },
             }}
           >
-            RealityLife Magazine — Amplifying voices, shaping narratives, and
+            RealityLife Magazine  Amplifying voices, shaping narratives, and
             documenting today for tomorrow’s legacy.
           </Typography>
 
