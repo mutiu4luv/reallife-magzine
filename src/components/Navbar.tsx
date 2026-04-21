@@ -33,9 +33,9 @@ const Navbar: React.FC = () => {
       <AppBar
         position="static"
         sx={{
-          backgroundColor: "#000000", // matches logo background
+          backgroundColor: "#000",
           boxShadow: "none",
-          borderBottom: "1px solid rgba(255,215,0,0.15)", // soft gold line
+          borderBottom: "1px solid rgba(255,215,0,0.2)",
         }}
       >
         <Toolbar
@@ -44,7 +44,7 @@ const Navbar: React.FC = () => {
             justifyContent: "space-between",
             alignItems: "center",
             px: { xs: 2, md: 6 },
-            minHeight: { xs: 70, md: 90 },
+            minHeight: { xs: 80, md: 100 },
           }}
         >
           {/* Logo */}
@@ -54,9 +54,10 @@ const Navbar: React.FC = () => {
             alt="RealityLife Magazine Logo"
             onClick={() => navigate("/")}
             sx={{
-              height: { xs: 45, md: 60 },
+              height: { xs: 70, md: 80 }, // ✅ bigger on mobile
+              width: { xs: 140, md: 180 }, // ✅ better visibility
+              objectFit: "contain",
               cursor: "pointer",
-              imageRendering: "crisp-edges",
             }}
           />
 
@@ -76,8 +77,7 @@ const Navbar: React.FC = () => {
                   textTransform: "none",
                   fontWeight: 500,
                   fontSize: "1rem",
-                  color: "#ffffff",
-                  position: "relative",
+                  color: "#fff",
                   "&:hover": {
                     color: "#FFD700",
                     backgroundColor: "transparent",
@@ -89,7 +89,7 @@ const Navbar: React.FC = () => {
             ))}
           </Box>
 
-          {/* Mobile Menu */}
+          {/* Mobile Menu Icon */}
           <IconButton
             sx={{ display: { xs: "block", md: "none" }, color: "#fff" }}
             onClick={() => setOpen(true)}
@@ -99,13 +99,13 @@ const Navbar: React.FC = () => {
         </Toolbar>
       </AppBar>
 
-      {/* Drawer */}
+      {/* Mobile Drawer */}
       <Drawer anchor="right" open={open} onClose={() => setOpen(false)}>
         <Box
           sx={{
             width: 260,
             height: "100%",
-            bgcolor: "#fff",
+            bgcolor: "#ffffff", // ✅ white background
             pt: 4,
           }}
         >
@@ -119,16 +119,14 @@ const Navbar: React.FC = () => {
                   }}
                 >
                   <ListItemText
-  primary="Home"
-  slotProps={{
-    primary: {
-      sx: {
-        color: "white",
-        "&:hover": { color: "yellow" },
-      },
-    },
-  }}
-/> 
+                    primary={link.label}
+                    primaryTypographyProps={{
+                      sx: {
+                        color: "#000",
+                        fontWeight: 600,
+                      },
+                    }}
+                  />
                 </ListItemButton>
               </ListItem>
             ))}
