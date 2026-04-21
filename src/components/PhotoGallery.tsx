@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Box, Typography, IconButton } from "@mui/material";
 import KeyboardArrowLeftIcon from "@mui/icons-material/KeyboardArrowLeft";
 import KeyboardArrowRightIcon from "@mui/icons-material/KeyboardArrowRight";
+import { motion } from "framer-motion"; // ✅ Import motion
 
 import g1 from "../assets/gallery1.jpeg";
 import g2 from "../assets/gallery2.jpeg";
@@ -14,8 +15,6 @@ const gold = "#A67C1B";
 
 const PhotoGallery: React.FC = () => {
   const [current, setCurrent] = useState(0);
-
-  // Responsive items to show: 3 on desktop, 2 on tablet, 1 on mobile
   const [itemsToShow, setItemsToShow] = useState(3);
 
   useEffect(() => {
@@ -25,7 +24,7 @@ const PhotoGallery: React.FC = () => {
       else setItemsToShow(3);
     };
     
-    handleResize(); // Initial check
+    handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
@@ -40,7 +39,6 @@ const PhotoGallery: React.FC = () => {
     setCurrent((p) => (p <= 0 ? maxIndex : p - 1));
   };
 
-  // Auto slide
   useEffect(() => {
     const id = setInterval(next, 4000);
     return () => clearInterval(id);
@@ -48,7 +46,7 @@ const PhotoGallery: React.FC = () => {
 
   return (
     <Box sx={{ bgcolor: "#fff", py: 10, px: { xs: 2, md: 8 } }}>
-      {/* Heading */}
+      {/* Heading Section */}
       <Box sx={{ textAlign: "center", mb: 6 }}>
         <Typography
           variant="h4"
@@ -63,7 +61,35 @@ const PhotoGallery: React.FC = () => {
           Photo Gallery
         </Typography>
 
-        <Box sx={{ width: 80, height: 4, bgcolor: gold, mx: "auto", mt: 1, borderRadius: 2 }} />
+        {/* ✅ CONTINUOUS DRAWING LINE */}
+        <Box
+          sx={{
+            width: 120,
+            height: 4,
+            bgcolor: "rgba(166,124,27,0.1)", // Background track
+            mx: "auto",
+            mt: 1,
+            borderRadius: 2,
+            overflow: "hidden",
+            position: "relative",
+          }}
+        >
+          <motion.div
+            initial={{ width: "0%" }}
+            animate={{ width: "100%" }}
+            transition={{
+              duration: 2, // Speed of the draw
+              repeat: Infinity,
+              ease: "easeInOut",
+              repeatType: "loop",
+            }}
+            style={{
+              height: "100%",
+              background: gold,
+              borderRadius: "2px",
+            }}
+          />
+        </Box>
 
         <Typography sx={{ mt: 3, maxWidth: 700, mx: "auto", color: "#555" }}>
           Explore moments captured in our magazine journey.
@@ -75,7 +101,7 @@ const PhotoGallery: React.FC = () => {
         <Box
           sx={{
             width: "100%",
-            height: { xs: 220, md: 280 }, // Slightly taller for desktop
+            height: { xs: 220, md: 280 },
             overflow: "hidden",
             borderRadius: 3,
           }}
@@ -84,7 +110,6 @@ const PhotoGallery: React.FC = () => {
             sx={{
               display: "flex",
               height: "100%",
-              // Moves based on the percentage of one item's width
               transform: `translateX(-${current * (100 / itemsToShow)}%)`,
               transition: "transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)",
             }}
@@ -93,10 +118,9 @@ const PhotoGallery: React.FC = () => {
               <Box
                 key={i}
                 sx={{
-                  // Calculate width based on how many items we want to show
                   minWidth: `${100 / itemsToShow}%`,
                   height: "100%",
-                  px: 1, // Adds gap between images
+                  px: 1,
                   boxSizing: "border-box",
                 }}
               >
