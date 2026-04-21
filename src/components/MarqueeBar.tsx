@@ -8,7 +8,7 @@ const MarqueeBar: React.FC = () => {
     <Box
       sx={{
         height: "10vh",
-        bgcolor: "gold",
+        bgcolor: "#A67C1B",
         display: "flex",
         alignItems: "center",
         overflow: "hidden",
