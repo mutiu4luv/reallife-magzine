@@ -54,6 +54,7 @@ const TestimonyCard: React.FC<{
   item: Testimony;
   index: number;
 }> = ({ item, index }) => {
+  // Local state ensures the button only functions for this specific card
   const [expanded, setExpanded] = useState(false);
 
   const directions = [
@@ -83,6 +84,9 @@ const TestimonyCard: React.FC<{
           height: "100%",
           position: "relative",
           transition: "all 0.3s ease",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
           "&:hover": {
             transform: "translateY(-10px)",
             boxShadow: `0 12px 25px rgba(166,124,27,0.25)`,
@@ -98,25 +102,54 @@ const TestimonyCard: React.FC<{
           },
         }}
       >
-        <CardContent sx={{ p: 1, textAlign: "center" }}>
-          <Avatar
-            src={item.image}
-            alt={item.name}
-            sx={{
-              width: 70,
-              height: 70,
-              mx: "auto",
-              mb: 2,
-              border: `2px solid ${gold}`,
-            }}
-          />
+        <CardContent sx={{ p: 1, textAlign: "left", flexGrow: 1 }}>
+          <Box sx={{ textAlign: 'center', mb: 2 }}>
+            <Avatar
+              src={item.image}
+              alt={item.name}
+              sx={{
+                width: 70,
+                height: 70,
+                mx: "auto",
+                mb: 2,
+                border: `2px solid ${gold}`,
+              }}
+            />
+            <Typography
+              variant="subtitle1"
+              sx={{ fontWeight: 700, color: gold }}
+            >
+              {item.name}
+            </Typography>
 
-          <Typography
-            variant="subtitle1"
-            sx={{ fontWeight: 700, color: gold, mb: 1 }}
-          >
-            {item.name}
-          </Typography>
+            {/* Moving Gold Line Container */}
+            <Box 
+              sx={{ 
+                width: "60px", 
+                height: "2px", 
+                bgcolor: "rgba(166,124,27,0.2)", 
+                mx: "auto", 
+                mt: 1, 
+                overflow: "hidden",
+                position: "relative"
+              }}
+            >
+              <motion.div
+                animate={{ x: ["-100%", "100%"] }}
+                transition={{ 
+                  duration: 2, 
+                  repeat: Infinity, 
+                  ease: "linear" 
+                }}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  background: gold,
+                  position: "absolute"
+                }}
+              />
+            </Box>
+          </Box>
 
           <Typography
             variant="body2"
@@ -125,7 +158,10 @@ const TestimonyCard: React.FC<{
               fontSize: "0.9rem",
               lineHeight: 1.7,
               fontStyle: "italic",
+              textAlign: "left",
               minHeight: 72,
+              borderBottom: `1px solid rgba(166,124,27,0.3)`,
+              pb: 1
             }}
           >
             "{expanded ? item.message : truncate(item.message)}"
@@ -134,12 +170,18 @@ const TestimonyCard: React.FC<{
           {item.message.length > 110 && (
             <Button
               size="small"
-              onClick={() => setExpanded((p) => !p)}
+              onClick={() => setExpanded(!expanded)}
               sx={{
-                mt: 1,
+                mt: 2,
                 color: gold,
                 textTransform: "none",
                 fontWeight: 600,
+                p: 0,
+                minWidth: 0,
+                "&:hover": { 
+                    background: "transparent", 
+                    textDecoration: "underline" 
+                }
               }}
             >
               {expanded ? "Read less" : "Read more"}
@@ -167,19 +209,29 @@ const TestimonySection: React.FC = () => {
         overflow: "hidden", 
       }}
     >
-      <Typography
-        variant="h4"
-        sx={{
-          fontWeight: 900,
-          color: gold,
-          textTransform: "uppercase",
-          mb: 8,
-          letterSpacing: "2px",
-          fontSize: { xs: "1.6rem", md: "2.2rem" },
-        }}
-      >
-        What Our Readers Say
-      </Typography>
+      <Box sx={{ display: 'inline-block', mb: 8 }}>
+        <Typography
+          variant="h4"
+          sx={{
+            fontWeight: 900,
+            color: gold,
+            textTransform: "uppercase",
+            letterSpacing: "2px",
+            fontSize: { xs: "1.6rem", md: "2.2rem" },
+            mb: 1
+          }}
+        >
+          What Our Readers Say
+        </Typography>
+        {/* Animated Headline Underline */}
+        <Box sx={{ width: "100%", height: "4px", bgcolor: "rgba(166,124,27,0.2)", borderRadius: "2px", overflow: 'hidden', position: 'relative' }}>
+            <motion.div 
+                animate={{ x: ["-100%", "100%"] }}
+                transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                style={{ width: '40%', height: '100%', background: gold, position: 'absolute' }}
+            />
+        </Box>
+      </Box>
 
       <Box
         sx={{
@@ -187,10 +239,7 @@ const TestimonySection: React.FC = () => {
           flexDirection: "row",
           flexWrap: "wrap",
           justifyContent: "center",
-          /* rowGap handles vertical space when cards stack.
-             columnGap handles horizontal space.
-          */
-          rowGap: { xs: 6, md: 0 }, 
+          rowGap: { xs: 6, md: 8 }, 
           columnGap: { xs: 2, md: 10 },
         }}
       >
@@ -201,8 +250,6 @@ const TestimonySection: React.FC = () => {
               flex: { xs: "100%", sm: "45%", md: "25%" },
               display: "flex",
               justifyContent: "center",
-              // Extra safety: margin bottom for older browsers that don't support row-gap well
-              mb: { xs: 4, md: 0 } 
             }}
           >
             <TestimonyCard item={item} index={index} />
