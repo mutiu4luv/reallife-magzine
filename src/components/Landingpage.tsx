@@ -3,6 +3,7 @@ import Reallife from "./Reallife"
 import MarqueeBar from "./MarqueeBar"
 import BenefitSection from "./BenefitSEction"
 import Testimoney from "./Testimoney"
+import PhotoGallery from "./PhotoGallery"
 const Landingpage = () => {
   return (
     <div>
@@ -11,6 +12,7 @@ const Landingpage = () => {
       <Reallife /> 
       <BenefitSection /> 
       <Testimoney />
+      <PhotoGallery />
     </div>
   )
 }
