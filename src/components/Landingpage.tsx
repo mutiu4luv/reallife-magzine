@@ -6,6 +6,7 @@ import Testimoney from "./Testimoney"
 import PhotoGallery from "./PhotoGallery"
 import AboutSection from "./AboutSection"
 import InterviewSection from "./InterviewSection"
+import Footer from "./Footer"
 const Landingpage = () => {
   return (
     <div>
@@ -17,6 +18,7 @@ const Landingpage = () => {
       <PhotoGallery />
       <AboutSection />
       <InterviewSection />
+      <Footer />
     </div>
   )
 }
