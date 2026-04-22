@@ -6,6 +6,7 @@ import AboutUsSection from "./screens/AboutUsScreen";
 import ServiceScreen from "./screens/ServiceScreen";
 import ContactUsScreen from "./screens/Contact";
 import ProfileScreen from "./screens/ProfileScreen";
+import BlogScreen from "./screens/blogScreen";
 
 function App() {
 
@@ -21,9 +22,8 @@ function App() {
         <Route path="/services" element={<ServiceScreen />} />
         <Route path="/contact" element={<ContactUsScreen />} />
         <Route path="/profile" element={<ProfileScreen/>} />
+        <Route path="/blog" element={<BlogScreen />} />
 
-        {/* 
-        <Route path="/magzine" element={<Magazine />} /> */}
       {/* </Route> */}
     </Routes>
     </>

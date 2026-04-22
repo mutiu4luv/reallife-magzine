@@ -67,7 +67,7 @@ const Hero: React.FC = () => {
             <Button
               variant="contained"
               size="large"
-              onClick={() => navigate("/contact")}
+              onClick={() => navigate("/blog")}
               sx={{
                 backgroundColor: "#4F46E5",
                 borderRadius: "50px",
