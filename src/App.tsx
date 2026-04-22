@@ -4,6 +4,7 @@ import './App.css'
 import Navbar from "./components/Navbar";
 import AboutUsSection from "./screens/AboutUsScreen";
 import ServiceScreen from "./screens/ServiceScreen";
+import ContactUsScreen from "./screens/Contact";
 
 function App() {
 
@@ -17,8 +18,8 @@ function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/about" element={<AboutUsSection />} />
         <Route path="/services" element={<ServiceScreen />} />
-
-        {/* <Route path="/contact" element={<Contact />} />
+        <Route path="/contact" element={<ContactUsScreen />} />
+        {/* 
         <Route path="/profile" element={<Profile />} />
         <Route path="/magzine" element={<Magazine />} /> */}
       {/* </Route> */}
