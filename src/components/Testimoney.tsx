@@ -10,6 +10,8 @@ import {
 import { motion } from "framer-motion";
 import heroPng from "../assets/hero.png";
 import heroJpeg from "../assets/hero.jpeg";
+import dr from "../assets/dr.jpeg";
+import prof from "../assets/prof.jpeg";
 
 const gold = "#A67C1B";
 
@@ -27,16 +29,22 @@ const testimonies: Testimony[] = [
       "RealityLife Magazine tells stories that truly matter. Every edition leaves me inspired. The depth of storytelling and authenticity is rare and powerful.",
   },
   {
-    name: "Ifeanyi Stanley",
+    name: "Barr. Fasehun",
     image: heroJpeg,
     message:
-      "A powerful voice for culture and leadership. I always look forward to new releases because of the consistency and quality.",
+      "RealityLife Magazine is emerging as a formidable voice in Nigeria’s print media industry. With its distinct approach to storytelling, commitment to excellence, and growing influence, I have no doubt it is on track to become one of the top four most impactful print media platforms in the country. Its vision is clear, its voice is strong, and its future is exceptionally promising",
   },
   {
-    name: "Grace Obi",
-    image: heroJpeg,
+    name: "Prof. Dayo Duyile",
+    image: prof,
     message:
-      "This platform bridges knowledge, inspiration, and authentic storytelling beautifully. It has changed how I consume meaningful content online.",
+      "RealityLife Magazine stands as a remarkable and refreshing presence in Nigeria’s media landscape. The very first time I encountered the publication, I was convinced it was an international magazine such is the excellence of its editorial depth, graphic presentation, and print quality, which are truly second to none. As a veteran journalist and educator, I have always emphasized standards and professionalism. I have, on several occasions, referenced and shared the publication with my students at Elizabeth and at Wesley University, as a practical example of quality media production and impactful storytelling.RealityLife Magazine demonstrates a rare commitment to preserving narratives, informing society, and inspiring excellence. It is a publication I proudly support, and I am confident it will continue to grow as a leading voice in Nigeria’s print media industry",
+  },
+  {
+    name: "Dr. Mrs. Ojo",
+    image: dr,
+    message:
+      "In a highly competitive media environment, RealityLife Magazine continues to distinguish itself through quality, integrity, and purposeful storytelling. It is my considered view that the publication is well on its way to ranking among the top four print media institutions in Nigeria. Its consistency and dedication to shaping meaningful narratives make it a brand to watch.",
   },
 ];
 
