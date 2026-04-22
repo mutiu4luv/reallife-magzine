@@ -21,7 +21,8 @@ const navLinks = [
   { label: "Services", path: "/services" },
   { label: "Contact", path: "/contact" },
   { label: "Profile", path: "/profile" },
-  { label: "Career", path: "/internship" },
+  { label: "Blog", path: "/blog" },
+
 ];
 
 const Navbar: React.FC = () => {
