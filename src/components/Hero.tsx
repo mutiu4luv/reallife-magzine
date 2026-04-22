@@ -1,7 +1,8 @@
 import React from "react";
 import { Box, Typography, Button, Container, Stack } from "@mui/material";
 import { useNavigate } from "react-router-dom";
-import heroImage from "../assets/hero.jpeg";
+import heroImage from "../assets/mainhero.jpeg";
+import { Typewriter } from "react-simple-typewriter";
 
 const Hero: React.FC = () => {
   const navigate = useNavigate();
@@ -30,17 +31,24 @@ const Hero: React.FC = () => {
     >
       <Container maxWidth="lg">
         <Stack spacing={4} sx={{ maxWidth: "800px" }}>
-          <Typography
-            variant="h2"
-            sx={{
-              fontWeight: 800,
-              fontSize: { xs: "2.3rem", md: "3.8rem" },
-              lineHeight: 1.2,
-              letterSpacing: "-0.02em",
-            }}
-          >
-            Telling Africa’s Stories. Reaching the World.
-          </Typography>
+        <Typography
+  variant="h2"
+  sx={{
+    fontWeight: 800,
+    fontSize: { xs: "2.3rem", md: "3.8rem" },
+    lineHeight: 1.2,
+    letterSpacing: "-0.02em",
+  }}
+>
+  <Typewriter
+    words={["Telling Africa’s Stories. Reaching the World."]}
+    loop={1}             
+    cursor={false}       
+    typeSpeed={35}
+    deleteSpeed={0}
+    delaySpeed={1000}
+  />
+</Typography>
 
           <Typography
             variant="h6"
