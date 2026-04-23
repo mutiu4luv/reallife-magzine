@@ -2,7 +2,7 @@ import { Box, Typography } from "@mui/material";
 
 const MarqueeBar: React.FC = () => {
   const text =
-    "REAL LIFE MAGAZINE • REAL LIFE MAGAZINE • REAL LIFE MAGAZINE • ";
+    "REALLITYLIFE MAGAZINE • REALLITYLIFE MAGAZINE • REALLITYLIFE MAGAZINE • ";
 
   return (
     <Box

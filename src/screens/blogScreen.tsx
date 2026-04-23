@@ -70,8 +70,7 @@ const BlogScreen: React.FC = () => {
               letterSpacing: "-1px",
             }}
           >
-            Magazines & Books
-          </Typography>
+RealityLife News          </Typography>
 
           <Typography
             sx={{
