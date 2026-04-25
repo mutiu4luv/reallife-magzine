@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Container,
@@ -6,6 +6,7 @@ import {
   Paper,
   Chip,
   Button,
+  CircularProgress,
 } from "@mui/material";
 import { motion } from "framer-motion";
 import Footer from "../components/Footer";
@@ -18,7 +19,17 @@ const fadeUp = {
   show: { opacity: 1, y: 0 },
 };
 
-const posts = [
+type PostType = "Magazine" | "Book";
+
+type Post = {
+  _id?: string;
+  title: string;
+  type: PostType;
+  desc: string;
+  image: string;
+};
+
+const fallbackPosts: Post[] = [
   {
     title: "The Voice of Africa",
     type: "Magazine",
@@ -52,7 +63,35 @@ const posts = [
 
 ];
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+
 const BlogScreen: React.FC = () => {
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const displayedPosts = useMemo(() => (posts.length ? posts : fallbackPosts), [posts]);
+
+  useEffect(() => {
+    const loadPosts = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/posts`);
+        if (!response.ok) {
+          throw new Error("Unable to load posts");
+        }
+
+        const data = (await response.json()) as Post[];
+        setPosts(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Unable to load posts");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadPosts();
+  }, []);
+
   return (
     <>
     <Box sx={{ minHeight: "100vh", bgcolor: "#0a0a0a", py: 6 }}>
@@ -85,6 +124,18 @@ RealityLife News          </Typography>
           </Typography>
         </motion.div>
 
+        {loading && (
+          <Box sx={{ display: "flex", justifyContent: "center", mb: 4 }}>
+            <CircularProgress sx={{ color: gold }} />
+          </Box>
+        )}
+
+        {error && !loading && (
+          <Typography sx={{ color: "#d7b85a", textAlign: "center", mb: 4 }}>
+            {error}. Showing sample posts.
+          </Typography>
+        )}
+
         {/* FLEX GRID REPLACEMENT */}
         <Box
           sx={{
@@ -94,9 +145,9 @@ RealityLife News          </Typography>
             justifyContent: "center",
           }}
         >
-          {posts.map((post, i) => (
+          {displayedPosts.map((post, i) => (
             <motion.div
-              key={i}
+              key={post._id || `${post.title}-${i}`}
               initial="hidden"
               whileInView="show"
               viewport={{ once: false }}

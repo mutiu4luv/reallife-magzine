@@ -7,12 +7,15 @@ import ServiceScreen from "./screens/ServiceScreen";
 import ContactUsScreen from "./screens/Contact";
 import ProfileScreen from "./screens/ProfileScreen";
 import BlogScreen from "./screens/blogScreen";
+import AdminScreen from "./screens/AdminScreen";
+import UpcomingEventNotice from "./components/UpcomingEventNotice";
 
 function App() {
 
   return (
     <>
       <Navbar />
+      <UpcomingEventNotice />
       {/* <LandingPage /> */}
 
       <Routes>
@@ -23,6 +26,7 @@ function App() {
         <Route path="/contact" element={<ContactUsScreen />} />
         <Route path="/profile" element={<ProfileScreen/>} />
         <Route path="/blog" element={<BlogScreen />} />
+        <Route path="/admin" element={<AdminScreen />} />
 
       {/* </Route> */}
     </Routes>
