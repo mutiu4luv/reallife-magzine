@@ -10,6 +10,7 @@ import {
 } from "@mui/material";
 import { motion } from "framer-motion";
 import Footer from "../components/Footer";
+import { API_BASE_URL } from "../config/api";
 
 const gold = "#A67C1B";
 
@@ -62,8 +63,6 @@ const fallbackPosts: Post[] = [
   },
 
 ];
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
 const BlogScreen: React.FC = () => {
   const [posts, setPosts] = useState<Post[]>([]);

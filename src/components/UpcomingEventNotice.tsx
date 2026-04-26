@@ -11,8 +11,8 @@ import {
 } from "@mui/material";
 import { EventAvailable } from "@mui/icons-material";
 import { useLocation } from "react-router-dom";
+import { API_BASE_URL } from "../config/api";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 const EVENT_ENDPOINTS = [`${API_BASE_URL}/api/upcoming-events`, `${API_BASE_URL}/api/events`];
 
 type UpcomingEvent = {
