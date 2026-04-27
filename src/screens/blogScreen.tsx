@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Container,
@@ -7,7 +7,12 @@ import {
   Chip,
   Button,
   CircularProgress,
+  InputAdornment,
+  Pagination,
+  TextField,
+  useMediaQuery,
 } from "@mui/material";
+import SearchIcon from "@mui/icons-material/Search";
 import { motion } from "framer-motion";
 import Footer from "../components/Footer";
 import { API_BASE_URL } from "../config/api";
@@ -119,6 +124,27 @@ const BlogScreen: React.FC = () => {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [page, setPage] = useState(1);
+  const isSmallScreen = useMediaQuery("(max-width:899px)");
+  const pageSize = isSmallScreen ? 10 : 20;
+
+  const filteredPosts = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+
+    if (!query) {
+      return posts;
+    }
+
+    return posts.filter((post) => post.title.toLowerCase().includes(query));
+  }, [posts, searchTerm]);
+
+  const pageCount = Math.max(Math.ceil(filteredPosts.length / pageSize), 1);
+  const currentPage = Math.min(page, pageCount);
+  const paginatedPosts = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredPosts.slice(start, start + pageSize);
+  }, [currentPage, filteredPosts, pageSize]);
 
   useEffect(() => {
     const loadPosts = async () => {
@@ -212,6 +238,73 @@ RealityLife News          </Typography>
           </Paper>
         )}
 
+        {!loading && !error && posts.length > 0 && (
+          <Paper
+            elevation={0}
+            sx={{
+              mb: 4,
+              p: { xs: 2, sm: 2.5 },
+              borderRadius: 2,
+              bgcolor: "#111",
+              border: "1px solid rgba(255,255,255,0.12)",
+              display: "flex",
+              alignItems: { xs: "stretch", md: "center" },
+              justifyContent: "space-between",
+              gap: 2,
+              flexDirection: { xs: "column", md: "row" },
+            }}
+          >
+            <TextField
+              value={searchTerm}
+              onChange={(event) => {
+                setSearchTerm(event.target.value);
+                setPage(1);
+              }}
+              placeholder="Search posts by title"
+              fullWidth
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon sx={{ color: gold }} />
+                    </InputAdornment>
+                  ),
+                },
+              }}
+              sx={{
+                maxWidth: { xs: "100%", md: 460 },
+                "& .MuiOutlinedInput-root": {
+                  bgcolor: "#fff",
+                  borderRadius: 2,
+                },
+              }}
+            />
+
+            <Typography sx={{ color: "#c9c9c9", fontWeight: 700, textAlign: { xs: "left", md: "right" } }}>
+              Showing {paginatedPosts.length} of {filteredPosts.length} posts
+            </Typography>
+          </Paper>
+        )}
+
+        {!loading && !error && posts.length > 0 && filteredPosts.length === 0 && (
+          <Paper
+            elevation={0}
+            sx={{
+              maxWidth: 680,
+              mx: "auto",
+              mb: 4,
+              p: 3,
+              borderRadius: 2,
+              bgcolor: "#111",
+              border: "1px solid rgba(255,255,255,0.12)",
+              color: "#ddd",
+              textAlign: "center",
+            }}
+          >
+            No posts match "{searchTerm}".
+          </Paper>
+        )}
+
         <Box
           sx={{
             display: loading || error ? "none" : "grid",
@@ -219,9 +312,9 @@ RealityLife News          </Typography>
             gap: 3,
           }}
         >
-          {posts.map((post, i) => (
+          {paginatedPosts.map((post, i) => (
             <motion.div
-              key={post._id || `${post.title}-${i}`}
+              key={post._id || `${post.title}-${currentPage}-${i}`}
               initial="hidden"
               whileInView="show"
               viewport={{ once: false }}
@@ -305,6 +398,29 @@ RealityLife News          </Typography>
             </motion.div>
           ))}
         </Box>
+
+        {!loading && !error && filteredPosts.length > pageSize && (
+          <Box sx={{ display: "flex", justifyContent: "center", mt: 5 }}>
+            <Pagination
+              count={pageCount}
+              page={currentPage}
+              onChange={(_, value) => setPage(value)}
+              color="primary"
+              siblingCount={isSmallScreen ? 0 : 1}
+              boundaryCount={1}
+              sx={{
+                "& .MuiPaginationItem-root": {
+                  color: "#fff",
+                  borderColor: "rgba(255,255,255,0.24)",
+                },
+                "& .Mui-selected": {
+                  bgcolor: `${gold} !important`,
+                  color: "#fff",
+                },
+              }}
+            />
+          </Box>
+        )}
       </Container>
     </Box>
     <Footer/>
