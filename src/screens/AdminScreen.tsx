@@ -149,9 +149,6 @@ const normalizeCollection = <T,>(payload: unknown): T[] => {
   return [];
 };
 
-const getRejectedMessage = (result: PromiseSettledResult<unknown>, fallback: string) =>
-  result.status === "rejected" && result.reason instanceof Error ? result.reason.message : fallback;
-
 const requestJson = async <T,>(
   endpoints: string[],
   init?: RequestInit,
@@ -336,30 +333,24 @@ const AdminScreen: React.FC = () => {
 
   const loadAdminData = useCallback(async () => {
     setIsLoading(true);
-    const [postResult, eventResult, messageResult] = await Promise.allSettled([
-      requestJson<unknown>([POST_ENDPOINT], undefined, "Unable to load posts."),
-      requestJson<unknown>(EVENT_ENDPOINTS, undefined, "Unable to load upcoming events."),
-      requestJson<unknown>(CONTACT_ENDPOINTS, undefined, "Unable to load contact messages."),
-    ]);
+    try {
+      const [postPayload, eventPayload, messagePayload] = await Promise.all([
+        requestJson<unknown>([POST_ENDPOINT], undefined, "Unable to load posts."),
+        requestJson<unknown>(EVENT_ENDPOINTS, undefined, "Unable to load upcoming events."),
+        requestJson<unknown>(CONTACT_ENDPOINTS, undefined, "Unable to load contact messages."),
+      ]);
 
-    setPosts(postResult.status === "fulfilled" ? normalizeCollection<Post>(postResult.value) : []);
-    setEvents(eventResult.status === "fulfilled" ? normalizeCollection<UpcomingEvent>(eventResult.value) : []);
-    setMessages(messageResult.status === "fulfilled" ? normalizeCollection<ContactMessage>(messageResult.value) : []);
-
-    const failedRequests = [
-      postResult.status === "rejected" ? getRejectedMessage(postResult, "Unable to load posts.") : "",
-      eventResult.status === "rejected" ? getRejectedMessage(eventResult, "Unable to load upcoming events.") : "",
-      messageResult.status === "rejected" ? getRejectedMessage(messageResult, "Unable to load contact messages.") : "",
-    ].filter(Boolean);
-
-    if (failedRequests.length) {
+      setPosts(normalizeCollection<Post>(postPayload));
+      setEvents(normalizeCollection<UpcomingEvent>(eventPayload));
+      setMessages(normalizeCollection<ContactMessage>(messagePayload));
+    } catch (error) {
       setFeedback({
         severity: "error",
-        message: failedRequests.join(" "),
+        message: error instanceof Error ? error.message : "Unable to load admin data.",
       });
+    } finally {
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
   }, []);
 
   useEffect(() => {
