@@ -262,7 +262,7 @@ RealityLife News          </Typography>
               mx: "auto",
             }}
           >
-            Explore powerful stories, curated magazines, and thought-provoking books from RealityLife Magazine.
+            Explore powerful stories, People's, place, Politics, lifestyles, cultures and community development
           </Typography>
         </motion.div>
 
