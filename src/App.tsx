@@ -9,6 +9,8 @@ import ProfileScreen from "./screens/ProfileScreen";
 import BlogScreen from "./screens/blogScreen";
 import AdminScreen from "./screens/AdminScreen";
 import UpcomingEventNotice from "./components/UpcomingEventNotice";
+import NewsScreen from "./screens/NewsScreen";
+import UpcomingEventsScreen from "./screens/UpcomingEventsScreen";
 
 function App() {
 
@@ -26,6 +28,8 @@ function App() {
         <Route path="/contact" element={<ContactUsScreen />} />
         <Route path="/profile" element={<ProfileScreen/>} />
         <Route path="/blog" element={<BlogScreen />} />
+        <Route path="/news" element={<NewsScreen />} />
+        <Route path="/events" element={<UpcomingEventsScreen />} />
         <Route path="/admin" element={<AdminScreen />} />
 
       {/* </Route> */}

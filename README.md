@@ -16,9 +16,11 @@ Available upload endpoints:
 
 - `POST /api/news` with multipart fields `image`, `title`, and `description`
 - `GET /api/news`
+- `GET /api/news/:id`
 - `DELETE /api/news/:id`
 - `POST /api/upcoming-events` with multipart fields `images` (multiple), `title`, `description`, and optional `isActive`
 - `GET /api/upcoming-events`
+- `GET /api/upcoming-events/:id`
 - `DELETE /api/upcoming-events/:id`
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.

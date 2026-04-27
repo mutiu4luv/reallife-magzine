@@ -22,6 +22,8 @@ const navLinks = [
   { label: "Contact", path: "/contact" },
   { label: "Profile", path: "/profile" },
   { label: "Blog", path: "/blog" },
+  { label: "News", path: "/news" },
+  { label: "Events", path: "/events" },
 
 ];
 

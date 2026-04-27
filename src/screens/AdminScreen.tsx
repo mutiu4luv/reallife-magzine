@@ -36,6 +36,7 @@ import {
   ToggleOn,
 } from "@mui/icons-material";
 import { API_BASE_URL } from "../config/api";
+import { NEWS_ENDPOINT } from "../services/contentApi";
 
 const POST_ENDPOINT = `${API_BASE_URL}/api/posts`;
 const EVENT_ENDPOINTS = [`${API_BASE_URL}/api/upcoming-events`, `${API_BASE_URL}/api/events`];
@@ -60,7 +61,17 @@ type Post = {
 type UpcomingEvent = {
   _id?: string;
   title: string;
+  description?: string;
+  images?: string[];
   isActive: boolean;
+  createdAt?: string;
+};
+
+type NewsItem = {
+  _id?: string;
+  title: string;
+  description: string;
+  image: string;
   createdAt?: string;
 };
 
@@ -79,10 +90,11 @@ type Feedback = {
 
 type PendingDelete =
   | { kind: "post"; item: Post }
+  | { kind: "news"; item: NewsItem }
   | { kind: "event"; item: UpcomingEvent }
   | null;
 
-type ActiveView = "dashboard" | "posts" | "events" | "messages";
+type ActiveView = "dashboard" | "posts" | "news" | "events" | "messages";
 
 type RequestJsonOptions = {
   retryDatabaseReady?: boolean;
@@ -91,6 +103,7 @@ type RequestJsonOptions = {
 const navItems = [
   { id: "dashboard", label: "Dashboard", icon: <Dashboard fontSize="small" /> },
   { id: "posts", label: "Posts", icon: <LibraryBooks fontSize="small" /> },
+  { id: "news", label: "News", icon: <Article fontSize="small" /> },
   { id: "events", label: "Events", icon: <EventAvailable fontSize="small" /> },
   { id: "messages", label: "Messages", icon: <Mail fontSize="small" /> },
 ] satisfies Array<{ id: ActiveView; label: string; icon: React.ReactNode }>;
@@ -104,9 +117,13 @@ const viewCopy: Record<ActiveView, { title: string; subtitle: string }> = {
     title: "Posts",
     subtitle: "Create and review magazine or book posts from the posts API.",
   },
+  news: {
+    title: "News",
+    subtitle: "Upload news with an image, title, and description.",
+  },
   events: {
     title: "Upcoming Events",
-    subtitle: "Create and review upcoming event records from the events API.",
+    subtitle: "Upload upcoming events with multiple images, title, and description.",
   },
   messages: {
     title: "Contact Messages",
@@ -313,16 +330,21 @@ const AdminLoader = () => (
 
 const AdminScreen: React.FC = () => {
   const postFormRef = useRef<HTMLFormElement>(null);
+  const newsFormRef = useRef<HTMLFormElement>(null);
   const eventFormRef = useRef<HTMLFormElement>(null);
   const [posts, setPosts] = useState<Post[]>([]);
+  const [news, setNews] = useState<NewsItem[]>([]);
   const [events, setEvents] = useState<UpcomingEvent[]>([]);
   const [messages, setMessages] = useState<ContactMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingPost, setIsSavingPost] = useState(false);
+  const [isSavingNews, setIsSavingNews] = useState(false);
   const [isSavingEvent, setIsSavingEvent] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [selectedImageName, setSelectedImageName] = useState("");
+  const [selectedNewsImageName, setSelectedNewsImageName] = useState("");
+  const [selectedEventImageNames, setSelectedEventImageNames] = useState("");
   const [pendingDelete, setPendingDelete] = useState<PendingDelete>(null);
   const [activeView, setActiveView] = useState<ActiveView>("dashboard");
 
@@ -334,13 +356,15 @@ const AdminScreen: React.FC = () => {
   const loadAdminData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [postPayload, eventPayload, messagePayload] = await Promise.all([
+      const [postPayload, eventPayload, messagePayload, newsPayload] = await Promise.all([
         requestJson<unknown>([POST_ENDPOINT], undefined, "Unable to load posts."),
         requestJson<unknown>(EVENT_ENDPOINTS, undefined, "Unable to load upcoming events."),
         requestJson<unknown>(CONTACT_ENDPOINTS, undefined, "Unable to load contact messages."),
+        requestJson<unknown>([NEWS_ENDPOINT], undefined, "Unable to load news.").catch(() => []),
       ]);
 
       setPosts(normalizeCollection<Post>(postPayload));
+      setNews(normalizeCollection<NewsItem>(newsPayload));
       setEvents(normalizeCollection<UpcomingEvent>(eventPayload));
       setMessages(normalizeCollection<ContactMessage>(messagePayload));
     } catch (error) {
@@ -406,19 +430,63 @@ const AdminScreen: React.FC = () => {
     }
   };
 
+  const handleNewsSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+
+    const image = formData.get("image");
+    const title = String(formData.get("title") || "").trim();
+    const description = String(formData.get("description") || "").trim();
+
+    if (!title || !description || !(image instanceof File) || image.size === 0) {
+      setFeedback({ severity: "error", message: "News title, description, and image are required." });
+      return;
+    }
+
+    formData.set("title", title);
+    formData.set("description", description);
+
+    setIsSavingNews(true);
+    try {
+      const createdNews = await requestJson<NewsItem>(
+        [NEWS_ENDPOINT],
+        {
+          method: "POST",
+          body: formData,
+        },
+        "Unable to publish news."
+      );
+
+      setNews((currentNews) => [createdNews, ...currentNews]);
+      newsFormRef.current?.reset();
+      setSelectedNewsImageName("");
+      setFeedback({ severity: "success", message: "News published successfully." });
+    } catch (error) {
+      setFeedback({
+        severity: "error",
+        message: error instanceof Error ? error.message : "Unable to publish news.",
+      });
+    } finally {
+      setIsSavingNews(false);
+    }
+  };
+
   const handleEventSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
 
-    const payload = {
-      title: String(formData.get("title") || "").trim(),
-      isActive: formData.get("isActive") === "on",
-    };
+    const title = String(formData.get("title") || "").trim();
+    const description = String(formData.get("description") || "").trim();
+    const imageFiles = formData.getAll("images").filter((image) => image instanceof File && image.size > 0);
 
-    if (!payload.title) {
-      setFeedback({ severity: "error", message: "Event title is required." });
+    if (!title || !description || imageFiles.length === 0) {
+      setFeedback({ severity: "error", message: "Event title, description, and at least one image are required." });
       return;
     }
+
+    formData.set("title", title);
+    formData.set("description", description);
+    formData.set("isActive", formData.get("isActive") === "on" ? "true" : "false");
 
     setIsSavingEvent(true);
     try {
@@ -426,14 +494,14 @@ const AdminScreen: React.FC = () => {
         EVENT_ENDPOINTS,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: formData,
         },
         "Unable to create upcoming event."
       );
 
       setEvents((currentEvents) => [createdEvent, ...currentEvents]);
       eventFormRef.current?.reset();
+      setSelectedEventImageNames("");
       setFeedback({ severity: "success", message: "Upcoming event created successfully." });
     } catch (error) {
       setFeedback({
@@ -485,7 +553,39 @@ const AdminScreen: React.FC = () => {
       return;
     }
 
+    if (itemToDelete.kind === "news") {
+      await handleDeleteNews(itemToDelete.item);
+      return;
+    }
+
     await handleDeleteEvent(itemToDelete.item);
+  };
+
+  const handleDeleteNews = async (newsItem: NewsItem) => {
+    if (!newsItem._id) {
+      setFeedback({ severity: "error", message: "This news item cannot be deleted because it has no database id." });
+      return;
+    }
+
+    setDeletingId(newsItem._id);
+    setFeedback({ severity: "success", message: `Deleting "${newsItem.title}"...` });
+    try {
+      await requestJson<{ message: string }>(
+        [`${NEWS_ENDPOINT}/${newsItem._id}`],
+        { method: "DELETE" },
+        "Unable to delete news."
+      );
+
+      setNews((currentNews) => currentNews.filter((currentItem) => currentItem._id !== newsItem._id));
+      setFeedback({ severity: "success", message: "News deleted successfully." });
+    } catch (error) {
+      setFeedback({
+        severity: "error",
+        message: error instanceof Error ? error.message : "Unable to delete news.",
+      });
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const handleDeleteEvent = async (eventItem: UpcomingEvent) => {
@@ -673,6 +773,7 @@ const AdminScreen: React.FC = () => {
             >
               {[
                 { label: "Published posts", value: posts.length, icon: <Article /> },
+                { label: "News", value: news.length, icon: <Article /> },
                 { label: "Magazines", value: magazines, icon: <LibraryBooks /> },
                 { label: "Books", value: books, icon: <AutoStories /> },
                 { label: "Active events", value: activeEvents, icon: <ToggleOn /> },
@@ -695,7 +796,7 @@ const AdminScreen: React.FC = () => {
             </Box>
           )}
 
-          {(activeView === "posts" || activeView === "events") && (
+          {(activeView === "posts" || activeView === "news" || activeView === "events") && (
           <Box
             sx={{
               display: "grid",
@@ -784,6 +885,81 @@ const AdminScreen: React.FC = () => {
             </Paper>
             )}
 
+            {activeView === "news" && (
+            <Paper
+              ref={newsFormRef}
+              component="form"
+              onSubmit={handleNewsSubmit}
+              elevation={0}
+              sx={{ p: { xs: 2, md: 3 }, border: "1px solid #e6e8ec", borderRadius: 2 }}
+            >
+              <Stack spacing={2.2}>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
+                    <Article sx={{ color: "#caa64a" }} />
+                    <Typography variant="h6" sx={{ fontWeight: 900 }}>
+                      Create News
+                    </Typography>
+                  </Box>
+                  <Chip size="small" label="News API" sx={{ bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 800 }} />
+                </Box>
+
+                <Divider />
+
+                <TextField required label="News title" name="title" fullWidth />
+
+                <TextField required multiline minRows={5} label="Description" name="description" fullWidth />
+
+                <Box>
+                  <Button
+                    component="label"
+                    variant="outlined"
+                    startIcon={<CloudUpload />}
+                    sx={{
+                      borderColor: "#caa64a",
+                      color: "#6f5517",
+                      textTransform: "none",
+                      fontWeight: 900,
+                      "&:hover": { borderColor: "#caa64a", bgcolor: "#f7edd0" },
+                    }}
+                  >
+                    Select news image
+                    <input
+                      hidden
+                      required
+                      type="file"
+                      name="image"
+                      accept="image/*"
+                      onChange={(changeEvent) => {
+                        setSelectedNewsImageName(changeEvent.target.files?.[0]?.name || "");
+                      }}
+                    />
+                  </Button>
+                  <Typography sx={{ color: "#667085", fontSize: 13, mt: 1 }}>
+                    {selectedNewsImageName || "No image selected"}
+                  </Typography>
+                </Box>
+
+                <Button
+                  type="submit"
+                  disabled={isSavingNews}
+                  startIcon={<Save />}
+                  sx={{
+                    alignSelf: "flex-start",
+                    bgcolor: "#111318",
+                    color: "#fff",
+                    textTransform: "none",
+                    fontWeight: 900,
+                    px: 3,
+                    "&:hover": { bgcolor: "#2a2f38" },
+                  }}
+                >
+                  {isSavingNews ? "Publishing..." : "Publish news"}
+                </Button>
+              </Stack>
+            </Paper>
+            )}
+
             {activeView === "events" && (
             <Paper
               ref={eventFormRef}
@@ -806,6 +982,42 @@ const AdminScreen: React.FC = () => {
                 <Divider />
 
                 <TextField required label="Event title" name="title" fullWidth />
+
+                <TextField required multiline minRows={5} label="Description" name="description" fullWidth />
+
+                <Box>
+                  <Button
+                    component="label"
+                    variant="outlined"
+                    startIcon={<CloudUpload />}
+                    sx={{
+                      borderColor: "#caa64a",
+                      color: "#6f5517",
+                      textTransform: "none",
+                      fontWeight: 900,
+                      "&:hover": { borderColor: "#caa64a", bgcolor: "#f7edd0" },
+                    }}
+                  >
+                    Select event images
+                    <input
+                      hidden
+                      required
+                      multiple
+                      type="file"
+                      name="images"
+                      accept="image/*"
+                      onChange={(changeEvent) => {
+                        const names = Array.from(changeEvent.target.files || [])
+                          .map((file) => file.name)
+                          .join(", ");
+                        setSelectedEventImageNames(names);
+                      }}
+                    />
+                  </Button>
+                  <Typography sx={{ color: "#667085", fontSize: 13, mt: 1 }}>
+                    {selectedEventImageNames || "No images selected"}
+                  </Typography>
+                </Box>
 
                 <FormControlLabel
                   control={<Checkbox name="isActive" defaultChecked sx={{ color: "#caa64a", "&.Mui-checked": { color: "#caa64a" } }} />}
@@ -917,6 +1129,79 @@ const AdminScreen: React.FC = () => {
             </Paper>
             )}
 
+            {activeView === "news" && (
+            <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid #e6e8ec", borderRadius: 2 }}>
+              <Typography variant="h6" sx={{ fontWeight: 900, mb: 2 }}>
+                Recent News
+              </Typography>
+              <Stack spacing={1.5}>
+                {news.slice(0, 8).map((newsItem) => (
+                  <Box
+                    key={newsItem._id || `${newsItem.title}-${newsItem.createdAt}`}
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: { xs: "64px 1fr", sm: "64px 1fr auto" },
+                      gap: 1.5,
+                      alignItems: "center",
+                      border: "1px solid #edf0f2",
+                      borderRadius: 1.5,
+                      p: 1.25,
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        width: 64,
+                        height: 64,
+                        borderRadius: 1,
+                        bgcolor: "#f2f4f7",
+                        overflow: "hidden",
+                        display: "grid",
+                        placeItems: "center",
+                        color: "#98a2b3",
+                      }}
+                    >
+                      {newsItem.image ? (
+                        <Box component="img" src={newsItem.image} alt="" sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      ) : (
+                        <Image />
+                      )}
+                    </Box>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography sx={{ fontWeight: 900, color: "#171a20" }} noWrap>
+                        {newsItem.title}
+                      </Typography>
+                      <Typography sx={{ color: "#667085", fontSize: 13 }} noWrap>
+                        {newsItem.description}
+                      </Typography>
+                    </Box>
+                    <Button
+                      onClick={() => setPendingDelete({ kind: "news", item: newsItem })}
+                      disabled={deletingId === newsItem._id}
+                      startIcon={<Delete />}
+                      size="small"
+                      sx={{
+                        gridColumn: { xs: "1 / -1", sm: "auto" },
+                        justifySelf: { xs: "stretch", sm: "end" },
+                        color: "#b42318",
+                        border: "1px solid #fda29b",
+                        bgcolor: "#fff",
+                        textTransform: "none",
+                        fontWeight: 900,
+                        "&:hover": { bgcolor: "#fff1f3", borderColor: "#f97066" },
+                      }}
+                    >
+                      Delete
+                    </Button>
+                  </Box>
+                ))}
+
+                {!news.length && !isLoading && (
+                  <Typography sx={{ color: "#667085" }}>No news returned from the API yet.</Typography>
+                )}
+              </Stack>
+            </Paper>
+            )}
+
             {activeView === "events" && (
             <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid #e6e8ec", borderRadius: 2 }}>
               <Typography variant="h6" sx={{ fontWeight: 900, mb: 2 }}>
@@ -940,10 +1225,15 @@ const AdminScreen: React.FC = () => {
                       <Typography sx={{ fontWeight: 900, color: "#171a20" }} noWrap>
                         {event.title}
                       </Typography>
-                      <Typography sx={{ color: "#667085", fontSize: 13 }}>
-                        {formatDate(event.createdAt)}
+                      <Typography sx={{ color: "#667085", fontSize: 13 }} noWrap>
+                        {event.description || formatDate(event.createdAt)}
                       </Typography>
                     </Box>
+                    <Chip
+                      size="small"
+                      label={`${event.images?.length || 0} images`}
+                      sx={{ display: { xs: "none", sm: "inline-flex" }, fontWeight: 900 }}
+                    />
                       <Chip
                         size="small"
                         label={event.isActive ? "Active" : "Hidden"}
