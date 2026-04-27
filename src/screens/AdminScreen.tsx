@@ -55,6 +55,7 @@ type Post = {
   type: PostType;
   desc: string;
   image: string;
+  images?: string[];
   createdAt?: string;
 };
 
@@ -102,7 +103,7 @@ type RequestJsonOptions = {
 
 const navItems = [
   { id: "dashboard", label: "Dashboard", icon: <Dashboard fontSize="small" /> },
-  { id: "posts", label: "Posts", icon: <LibraryBooks fontSize="small" /> },
+  { id: "posts", label: "Blog", icon: <LibraryBooks fontSize="small" /> },
   { id: "news", label: "News", icon: <Article fontSize="small" /> },
   { id: "events", label: "Events", icon: <EventAvailable fontSize="small" /> },
   { id: "messages", label: "Messages", icon: <Mail fontSize="small" /> },
@@ -111,11 +112,11 @@ const navItems = [
 const viewCopy: Record<ActiveView, { title: string; subtitle: string }> = {
   dashboard: {
     title: "Admin Dashboard",
-    subtitle: "Track posts, magazines, books, and active upcoming events.",
+    subtitle: "Track blog articles, magazines, books, and active upcoming events.",
   },
   posts: {
-    title: "Posts",
-    subtitle: "Create and review magazine or book posts from the posts API.",
+    title: "Blog",
+    subtitle: "Create and review blog articles, magazines, and books.",
   },
   news: {
     title: "News",
@@ -164,6 +165,20 @@ const normalizeCollection = <T,>(payload: unknown): T[] => {
   }
 
   return [];
+};
+
+const requestCollection = async <T,>(endpoints: string[], fallback: string) => {
+  try {
+    return {
+      items: normalizeCollection<T>(await requestJson<unknown>(endpoints, undefined, fallback)),
+      error: "",
+    };
+  } catch (error) {
+    return {
+      items: [],
+      error: error instanceof Error ? error.message : fallback,
+    };
+  }
 };
 
 const requestJson = async <T,>(
@@ -305,7 +320,7 @@ const AdminLoader = () => (
           Preparing admin studio
         </Typography>
         <Typography sx={{ color: "#cbd5e1", mt: 1, fontSize: 15 }}>
-          Loading posts, events, and database records.
+          Loading blog articles, events, and database records.
         </Typography>
       </Box>
 
@@ -342,8 +357,9 @@ const AdminScreen: React.FC = () => {
   const [isSavingEvent, setIsSavingEvent] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
-  const [selectedImageName, setSelectedImageName] = useState("");
+  const [selectedBlogImageNames, setSelectedBlogImageNames] = useState("");
   const [selectedNewsImageName, setSelectedNewsImageName] = useState("");
+  const [selectedNewsImagePreview, setSelectedNewsImagePreview] = useState("");
   const [selectedEventImageNames, setSelectedEventImageNames] = useState("");
   const [pendingDelete, setPendingDelete] = useState<PendingDelete>(null);
   const [activeView, setActiveView] = useState<ActiveView>("dashboard");
@@ -355,26 +371,33 @@ const AdminScreen: React.FC = () => {
 
   const loadAdminData = useCallback(async () => {
     setIsLoading(true);
-    try {
-      const [postPayload, eventPayload, messagePayload, newsPayload] = await Promise.all([
-        requestJson<unknown>([POST_ENDPOINT], undefined, "Unable to load posts."),
-        requestJson<unknown>(EVENT_ENDPOINTS, undefined, "Unable to load upcoming events."),
-        requestJson<unknown>(CONTACT_ENDPOINTS, undefined, "Unable to load contact messages."),
-        requestJson<unknown>([NEWS_ENDPOINT], undefined, "Unable to load news.").catch(() => []),
-      ]);
+    const [postResult, eventResult, messageResult, newsResult] = await Promise.all([
+      requestCollection<Post>([POST_ENDPOINT], "Unable to load blogs."),
+      requestCollection<UpcomingEvent>(EVENT_ENDPOINTS, "Unable to load upcoming events."),
+      requestCollection<ContactMessage>(CONTACT_ENDPOINTS, "Unable to load contact messages."),
+      requestCollection<NewsItem>([NEWS_ENDPOINT], "Unable to load news."),
+    ]);
 
-      setPosts(normalizeCollection<Post>(postPayload));
-      setNews(normalizeCollection<NewsItem>(newsPayload));
-      setEvents(normalizeCollection<UpcomingEvent>(eventPayload));
-      setMessages(normalizeCollection<ContactMessage>(messagePayload));
-    } catch (error) {
+    setPosts(postResult.items);
+    setNews(newsResult.items);
+    setEvents(eventResult.items);
+    setMessages(messageResult.items);
+
+    const failedSections = [
+      postResult.error && "blogs",
+      eventResult.error && "events",
+      messageResult.error && "messages",
+      newsResult.error && "news",
+    ].filter(Boolean);
+
+    if (failedSections.length > 0) {
       setFeedback({
         severity: "error",
-        message: error instanceof Error ? error.message : "Unable to load admin data.",
+        message: `Could not load ${failedSections.join(", ")}. Showing only data returned from the backend.`,
       });
-    } finally {
-      setIsLoading(false);
     }
+
+    setIsLoading(false);
   }, []);
 
   useEffect(() => {
@@ -387,23 +410,49 @@ const AdminScreen: React.FC = () => {
     };
   }, [loadAdminData]);
 
+  useEffect(() => {
+    return () => {
+      if (selectedNewsImagePreview) {
+        URL.revokeObjectURL(selectedNewsImagePreview);
+      }
+    };
+  }, [selectedNewsImagePreview]);
+
+  const handleNewsImageChange = (changeEvent: React.ChangeEvent<HTMLInputElement>) => {
+    const file = changeEvent.target.files?.[0];
+
+    if (selectedNewsImagePreview) {
+      URL.revokeObjectURL(selectedNewsImagePreview);
+    }
+
+    if (!file) {
+      setSelectedNewsImageName("");
+      setSelectedNewsImagePreview("");
+      return;
+    }
+
+    setSelectedNewsImageName(file.name);
+    setSelectedNewsImagePreview(URL.createObjectURL(file));
+  };
+
   const handlePostSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
 
-    const image = formData.get("image");
+    const imageFiles = formData.getAll("images").filter((image) => image instanceof File && image.size > 0);
     const title = String(formData.get("title") || "").trim();
     const desc = String(formData.get("desc") || "").trim();
     const type = String(formData.get("type") || "Magazine") as PostType;
 
-    if (!title || !desc || !(image instanceof File) || image.size === 0) {
-      setFeedback({ severity: "error", message: "Title, description, and cover image are required." });
+    if (!title || !desc || imageFiles.length === 0) {
+      setFeedback({ severity: "error", message: "Blog title, description, and at least one image are required." });
       return;
     }
 
     formData.set("title", title);
     formData.set("desc", desc);
     formData.set("type", type);
+    formData.set("image", imageFiles[0]);
 
     setIsSavingPost(true);
     try {
@@ -413,17 +462,17 @@ const AdminScreen: React.FC = () => {
           method: "POST",
           body: formData,
         },
-        "Unable to publish post."
+        "Unable to publish blog."
       );
 
       setPosts((currentPosts) => [createdPost, ...currentPosts]);
       postFormRef.current?.reset();
-      setSelectedImageName("");
-      setFeedback({ severity: "success", message: "Post published successfully." });
+      setSelectedBlogImageNames("");
+      setFeedback({ severity: "success", message: "Blog published successfully." });
     } catch (error) {
       setFeedback({
         severity: "error",
-        message: error instanceof Error ? error.message : "Unable to publish post.",
+        message: error instanceof Error ? error.message : "Unable to publish blog.",
       });
     } finally {
       setIsSavingPost(false);
@@ -460,6 +509,7 @@ const AdminScreen: React.FC = () => {
       setNews((currentNews) => [createdNews, ...currentNews]);
       newsFormRef.current?.reset();
       setSelectedNewsImageName("");
+      setSelectedNewsImagePreview("");
       setFeedback({ severity: "success", message: "News published successfully." });
     } catch (error) {
       setFeedback({
@@ -515,7 +565,7 @@ const AdminScreen: React.FC = () => {
 
   const handleDeletePost = async (post: Post) => {
     if (!post._id) {
-      setFeedback({ severity: "error", message: "This post cannot be deleted because it has no database id." });
+      setFeedback({ severity: "error", message: "This blog cannot be deleted because it has no database id." });
       return;
     }
 
@@ -525,15 +575,15 @@ const AdminScreen: React.FC = () => {
       await requestJson<{ message: string }>(
         [`${POST_ENDPOINT}/${post._id}`],
         { method: "DELETE" },
-        "Unable to delete post."
+        "Unable to delete blog."
       );
 
       setPosts((currentPosts) => currentPosts.filter((currentPost) => currentPost._id !== post._id));
-      setFeedback({ severity: "success", message: "Post deleted successfully." });
+      setFeedback({ severity: "success", message: "Blog deleted successfully." });
     } catch (error) {
       setFeedback({
         severity: "error",
-        message: error instanceof Error ? error.message : "Unable to delete post.",
+        message: error instanceof Error ? error.message : "Unable to delete blog.",
       });
     } finally {
       setDeletingId(null);
@@ -772,7 +822,7 @@ const AdminScreen: React.FC = () => {
               }}
             >
               {[
-                { label: "Published posts", value: posts.length, icon: <Article /> },
+                { label: "Published blogs", value: posts.length, icon: <Article /> },
                 { label: "News", value: news.length, icon: <Article /> },
                 { label: "Magazines", value: magazines, icon: <LibraryBooks /> },
                 { label: "Books", value: books, icon: <AutoStories /> },
@@ -818,15 +868,15 @@ const AdminScreen: React.FC = () => {
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
                     <Add sx={{ color: "#caa64a" }} />
                     <Typography variant="h6" sx={{ fontWeight: 900 }}>
-                      Create Post
+                      Create Blog
                     </Typography>
                   </Box>
-                  <Chip size="small" label="Post API" sx={{ bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 800 }} />
+                  <Chip size="small" label="Blog API" sx={{ bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 800 }} />
                 </Box>
 
                 <Divider />
 
-                <TextField required label="Title" name="title" fullWidth />
+                <TextField required label="Blog title" name="title" fullWidth />
 
                 <TextField select required label="Type" name="type" defaultValue="Magazine" fullWidth>
                   <MenuItem value="Magazine">Magazine</MenuItem>
@@ -848,20 +898,24 @@ const AdminScreen: React.FC = () => {
                       "&:hover": { borderColor: "#caa64a", bgcolor: "#f7edd0" },
                     }}
                   >
-                    Select cover image
+                    Select blog images
                     <input
                       hidden
                       required
+                      multiple
                       type="file"
-                      name="image"
+                      name="images"
                       accept="image/*"
                       onChange={(changeEvent) => {
-                        setSelectedImageName(changeEvent.target.files?.[0]?.name || "");
+                        const names = Array.from(changeEvent.target.files || [])
+                          .map((file) => file.name)
+                          .join(", ");
+                        setSelectedBlogImageNames(names);
                       }}
                     />
                   </Button>
                   <Typography sx={{ color: "#667085", fontSize: 13, mt: 1 }}>
-                    {selectedImageName || "No image selected"}
+                    {selectedBlogImageNames || "No images selected"}
                   </Typography>
                 </Box>
 
@@ -879,7 +933,7 @@ const AdminScreen: React.FC = () => {
                     "&:hover": { bgcolor: "#2a2f38" },
                   }}
                 >
-                  {isSavingPost ? "Publishing..." : "Publish post"}
+                  {isSavingPost ? "Publishing..." : "Publish blog"}
                 </Button>
               </Stack>
             </Paper>
@@ -910,34 +964,96 @@ const AdminScreen: React.FC = () => {
 
                 <TextField required multiline minRows={5} label="Description" name="description" fullWidth />
 
-                <Box>
-                  <Button
-                    component="label"
-                    variant="outlined"
-                    startIcon={<CloudUpload />}
-                    sx={{
-                      borderColor: "#caa64a",
-                      color: "#6f5517",
-                      textTransform: "none",
-                      fontWeight: 900,
-                      "&:hover": { borderColor: "#caa64a", bgcolor: "#f7edd0" },
-                    }}
-                  >
-                    Select news image
-                    <input
-                      hidden
-                      required
-                      type="file"
-                      name="image"
-                      accept="image/*"
-                      onChange={(changeEvent) => {
-                        setSelectedNewsImageName(changeEvent.target.files?.[0]?.name || "");
-                      }}
-                    />
-                  </Button>
-                  <Typography sx={{ color: "#667085", fontSize: 13, mt: 1 }}>
-                    {selectedNewsImageName || "No image selected"}
-                  </Typography>
+                <Box
+                  component="label"
+                  sx={{
+                    cursor: "pointer",
+                    border: "1.5px dashed #caa64a",
+                    borderRadius: 2,
+                    bgcolor: "#fffaf0",
+                    minHeight: { xs: 220, sm: 260 },
+                    display: "grid",
+                    placeItems: "center",
+                    overflow: "hidden",
+                    position: "relative",
+                    transition: "border-color 160ms ease, background-color 160ms ease",
+                    "&:hover": {
+                      borderColor: "#9a7725",
+                      bgcolor: "#fff4d9",
+                    },
+                  }}
+                >
+                  <input
+                    hidden
+                    required
+                    type="file"
+                    name="image"
+                    accept="image/*"
+                    onChange={handleNewsImageChange}
+                  />
+                  {selectedNewsImagePreview ? (
+                    <>
+                      <Box
+                        component="img"
+                        src={selectedNewsImagePreview}
+                        alt="Selected news"
+                        sx={{ width: "100%", height: "100%", minHeight: { xs: 220, sm: 260 }, objectFit: "cover" }}
+                      />
+                      <Box
+                        sx={{
+                          position: "absolute",
+                          left: 12,
+                          right: 12,
+                          bottom: 12,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: 1.5,
+                          bgcolor: "rgba(17,19,24,0.86)",
+                          color: "#fff",
+                          borderRadius: 1.5,
+                          px: 1.5,
+                          py: 1,
+                        }}
+                      >
+                        <Typography sx={{ fontSize: 13, fontWeight: 800, minWidth: 0 }} noWrap>
+                          {selectedNewsImageName}
+                        </Typography>
+                        <Button
+                          component="span"
+                          size="small"
+                          startIcon={<CloudUpload />}
+                          sx={{ color: "#f7edd0", textTransform: "none", fontWeight: 900, flexShrink: 0 }}
+                        >
+                          Change
+                        </Button>
+                      </Box>
+                    </>
+                  ) : (
+                    <Stack spacing={1.25} sx={{ alignItems: "center", textAlign: "center", px: 2 }}>
+                      <Box
+                        sx={{
+                          width: 56,
+                          height: 56,
+                          borderRadius: 1.5,
+                          bgcolor: "#caa64a",
+                          color: "#111318",
+                          display: "grid",
+                          placeItems: "center",
+                        }}
+                      >
+                        <CloudUpload />
+                      </Box>
+                      <Box>
+                        <Typography sx={{ fontWeight: 900, color: "#171a20" }}>
+                          Upload news image
+                        </Typography>
+                        <Typography sx={{ color: "#667085", fontSize: 13, mt: 0.5 }}>
+                          Click here and choose an image from your device.
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  )}
                 </Box>
 
                 <Button
@@ -1058,10 +1174,10 @@ const AdminScreen: React.FC = () => {
             {activeView === "posts" && (
             <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid #e6e8ec", borderRadius: 2 }}>
               <Typography variant="h6" sx={{ fontWeight: 900, mb: 2 }}>
-                Recent Posts
+                Recent Blogs
               </Typography>
               <Stack spacing={1.5}>
-                {posts.slice(0, 5).map((post) => (
+                {posts.map((post) => (
                   <Box
                     key={post._id || `${post.title}-${post.createdAt}`}
                     sx={{
@@ -1086,8 +1202,8 @@ const AdminScreen: React.FC = () => {
                         color: "#98a2b3",
                       }}
                     >
-                      {post.image ? (
-                        <Box component="img" src={post.image} alt="" sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      {post.image || post.images?.[0] ? (
+                        <Box component="img" src={post.image || post.images?.[0]} alt="" sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
                       ) : (
                         <Image />
                       )}
@@ -1123,7 +1239,7 @@ const AdminScreen: React.FC = () => {
                 ))}
 
                 {!posts.length && !isLoading && (
-                  <Typography sx={{ color: "#667085" }}>No posts returned from the API yet.</Typography>
+                  <Typography sx={{ color: "#667085" }}>No blogs returned from the API yet.</Typography>
                 )}
               </Stack>
             </Paper>
@@ -1135,7 +1251,7 @@ const AdminScreen: React.FC = () => {
                 Recent News
               </Typography>
               <Stack spacing={1.5}>
-                {news.slice(0, 8).map((newsItem) => (
+                {news.map((newsItem) => (
                   <Box
                     key={newsItem._id || `${newsItem.title}-${newsItem.createdAt}`}
                     sx={{
@@ -1208,7 +1324,7 @@ const AdminScreen: React.FC = () => {
                 Upcoming Events
               </Typography>
               <Stack spacing={1.25}>
-                {events.slice(0, 6).map((event) => (
+                {events.map((event) => (
                   <Box
                     key={event._id || `${event.title}-${event.createdAt}`}
                     sx={{

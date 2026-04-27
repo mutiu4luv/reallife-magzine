@@ -3,6 +3,7 @@ import express from "express";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { randomUUID } from "node:crypto";
 import multer from "multer";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -57,7 +58,7 @@ const ensureDatabase = async () => {
   try {
     await fs.access(DB_PATH);
   } catch {
-    await fs.writeFile(DB_PATH, JSON.stringify({ news: [], upcomingEvents: [] }, null, 2));
+    await fs.writeFile(DB_PATH, JSON.stringify({ posts: [], news: [], upcomingEvents: [] }, null, 2));
   }
 };
 
@@ -67,6 +68,7 @@ const readDatabase = async () => {
   const data = JSON.parse(raw);
 
   return {
+    posts: Array.isArray(data.posts) ? data.posts : [],
     news: Array.isArray(data.news) ? data.news : [],
     upcomingEvents: Array.isArray(data.upcomingEvents) ? data.upcomingEvents : [],
   };
@@ -81,12 +83,119 @@ const getBaseUrl = (req) => `${req.protocol}://${req.get("host")}`;
 
 const toImageUrl = (req, file) => `${getBaseUrl(req)}/uploads/${file.filename}`;
 
-const makeId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+const getSubmittedImage = (req) => {
+  if (req.file) {
+    return toImageUrl(req, req.file);
+  }
+
+  return String(req.body.imageUrl || req.body.image || "").trim();
+};
+
+const makeId = () => randomUUID();
 
 const matchesId = (item, id) => item._id === id || item.id === id;
 
+const createRecord = (record) => {
+  const id = makeId();
+
+  return {
+    id,
+    _id: id,
+    ...record,
+    createdAt: new Date().toISOString(),
+  };
+};
+
+const findById = (items, id) => items.find((item) => matchesId(item, id));
+
+const notFound = (res, message) => {
+  res.status(404).json({ message });
+};
+
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
+});
+
+app.get("/api/posts", async (_req, res, next) => {
+  try {
+    const db = await readDatabase();
+    res.json(db.posts);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post(
+  "/api/posts",
+  upload.fields([
+    { name: "image", maxCount: 1 },
+    { name: "images", maxCount: 8 },
+  ]),
+  async (req, res, next) => {
+    try {
+      const title = String(req.body.title || "").trim();
+      const desc = String(req.body.desc || req.body.description || "").trim();
+      const type = String(req.body.type || "Magazine").trim();
+      const fileGroups = req.files && typeof req.files === "object" ? req.files : {};
+      const files = [...(fileGroups.image || []), ...(fileGroups.images || [])];
+      const images = files.map((file) => toImageUrl(req, file));
+
+      if (!title || !desc || images.length === 0) {
+        res.status(400).json({ message: "Title, description, and at least one image are required." });
+        return;
+      }
+
+      const db = await readDatabase();
+      const postItem = createRecord({
+        title,
+        type,
+        desc,
+        description: desc,
+        image: images[0],
+        images,
+      });
+
+      db.posts.unshift(postItem);
+      await writeDatabase(db);
+      res.status(201).json(postItem);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+app.get("/api/posts/:id", async (req, res, next) => {
+  try {
+    const db = await readDatabase();
+    const postItem = findById(db.posts, req.params.id);
+
+    if (!postItem) {
+      notFound(res, "Blog item not found.");
+      return;
+    }
+
+    res.json(postItem);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/posts/:id", async (req, res, next) => {
+  try {
+    const db = await readDatabase();
+    const nextItems = db.posts.filter((item) => !matchesId(item, req.params.id));
+
+    if (nextItems.length === db.posts.length) {
+      notFound(res, "Blog item not found.");
+      return;
+    }
+
+    db.posts = nextItems;
+    await writeDatabase(db);
+    res.json({ message: "Blog deleted successfully." });
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.get("/api/news", async (_req, res, next) => {
@@ -102,20 +211,21 @@ app.post("/api/news", upload.single("image"), async (req, res, next) => {
   try {
     const title = String(req.body.title || "").trim();
     const description = String(req.body.description || req.body.desc || "").trim();
+    const image = getSubmittedImage(req);
 
-    if (!title || !description || !req.file) {
-      res.status(400).json({ message: "Title, description, and image are required." });
+    if (!title || !description || !image) {
+      res.status(400).json({
+        message: "Title, description, and image are required. Upload a file named 'image' or provide an imageUrl.",
+      });
       return;
     }
 
     const db = await readDatabase();
-    const newsItem = {
-      _id: makeId(),
+    const newsItem = createRecord({
       title,
       description,
-      image: toImageUrl(req, req.file),
-      createdAt: new Date().toISOString(),
-    };
+      image,
+    });
 
     db.news.unshift(newsItem);
     await writeDatabase(db);
@@ -128,10 +238,10 @@ app.post("/api/news", upload.single("image"), async (req, res, next) => {
 app.get("/api/news/:id", async (req, res, next) => {
   try {
     const db = await readDatabase();
-    const newsItem = db.news.find((item) => matchesId(item, req.params.id));
+    const newsItem = findById(db.news, req.params.id);
 
     if (!newsItem) {
-      res.status(404).json({ message: "News item not found." });
+      notFound(res, "News item not found.");
       return;
     }
 
@@ -147,7 +257,7 @@ app.delete("/api/news/:id", async (req, res, next) => {
     const nextItems = db.news.filter((item) => !matchesId(item, req.params.id));
 
     if (nextItems.length === db.news.length) {
-      res.status(404).json({ message: "News item not found." });
+      notFound(res, "News item not found.");
       return;
     }
 
@@ -180,14 +290,12 @@ app.post(["/api/upcoming-events", "/api/events"], upload.array("images", 8), asy
     }
 
     const db = await readDatabase();
-    const eventItem = {
-      _id: makeId(),
+    const eventItem = createRecord({
       title,
       description,
       images: files.map((file) => toImageUrl(req, file)),
       isActive: req.body.isActive === "true" || req.body.isActive === "on",
-      createdAt: new Date().toISOString(),
-    };
+    });
 
     db.upcomingEvents.unshift(eventItem);
     await writeDatabase(db);
@@ -200,10 +308,10 @@ app.post(["/api/upcoming-events", "/api/events"], upload.array("images", 8), asy
 app.get(["/api/upcoming-events/:id", "/api/events/:id"], async (req, res, next) => {
   try {
     const db = await readDatabase();
-    const eventItem = db.upcomingEvents.find((item) => matchesId(item, req.params.id));
+    const eventItem = findById(db.upcomingEvents, req.params.id);
 
     if (!eventItem) {
-      res.status(404).json({ message: "Upcoming event not found." });
+      notFound(res, "Upcoming event not found.");
       return;
     }
 
@@ -219,7 +327,7 @@ app.delete(["/api/upcoming-events/:id", "/api/events/:id"], async (req, res, nex
     const nextItems = db.upcomingEvents.filter((item) => !matchesId(item, req.params.id));
 
     if (nextItems.length === db.upcomingEvents.length) {
-      res.status(404).json({ message: "Upcoming event not found." });
+      notFound(res, "Upcoming event not found.");
       return;
     }
 

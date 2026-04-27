@@ -12,7 +12,7 @@ npm install
 npm run dev
 ```
 
-Available upload endpoints:
+Available upload endpoints. Created records include both `id` and `_id` so the frontend can use either key.
 
 - `POST /api/news` with multipart fields `image`, `title`, and `description`
 - `GET /api/news`
@@ -22,6 +22,8 @@ Available upload endpoints:
 - `GET /api/upcoming-events`
 - `GET /api/upcoming-events/:id`
 - `DELETE /api/upcoming-events/:id`
+
+`/api/events` is also supported as an alias for `/api/upcoming-events`.
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 

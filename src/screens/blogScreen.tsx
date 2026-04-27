@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { Link as RouterLink } from "react-router-dom";
 import {
   Box,
   Container,
@@ -31,10 +32,12 @@ type PostType = "Magazine" | "Book";
 
 type Post = {
   _id?: string;
+  id?: string;
   title: string;
   type: PostType;
   desc: string;
   image: string;
+  images?: string[];
 };
 
 const normalizePosts = (payload: unknown): Post[] => {
@@ -80,7 +83,7 @@ const buildNoCacheUrl = (endpoint: string) => {
 };
 
 const loadBackendPosts = async () => {
-  let lastError = "Unable to load posts";
+  let lastError = "Unable to load blog articles";
 
   for (let attempt = 0; attempt <= POST_RETRY_DELAYS.length; attempt += 1) {
     try {
@@ -93,7 +96,7 @@ const loadBackendPosts = async () => {
       });
 
       if (response.status === 304) {
-        throw new Error("Posts returned a not modified response without data.");
+        throw new Error("Blog articles returned a not modified response without data.");
       }
 
       if (!response.ok) {
@@ -102,7 +105,7 @@ const loadBackendPosts = async () => {
 
       const text = await response.text();
       if (!text) {
-        throw new Error("Posts returned an empty response.");
+        throw new Error("Blog articles returned an empty response.");
       }
 
       return normalizePosts(JSON.parse(text));
@@ -173,7 +176,7 @@ const BlogLoader = () => (
       Loading RealityLife News
     </Typography>
     <Typography sx={{ color: "#c9c9c9", mt: 1, mb: 3 }}>
-      Fetching the latest posts from the backend.
+      Fetching the latest blog articles from the backend.
     </Typography>
 
     <Box sx={{ display: "flex", justifyContent: "center", gap: 0.75 }} aria-hidden="true">
@@ -225,7 +228,7 @@ const BlogScreen: React.FC = () => {
       try {
         setPosts(await loadBackendPosts());
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Unable to load posts");
+        setError(err instanceof Error ? err.message : "Unable to load blog articles");
       } finally {
         setLoading(false);
       }
@@ -283,7 +286,7 @@ RealityLife News          </Typography>
               textAlign: "center",
             }}
           >
-            {error}. No posts are available right now.
+            {error}. No blog articles are available right now.
           </Paper>
         )}
 
@@ -302,7 +305,7 @@ RealityLife News          </Typography>
               textAlign: "center",
             }}
           >
-            No posts have been published yet.
+            No blog articles have been published yet.
           </Paper>
         )}
 
@@ -328,7 +331,7 @@ RealityLife News          </Typography>
                 setSearchTerm(event.target.value);
                 setPage(1);
               }}
-              placeholder="Search posts by title"
+              placeholder="Search blog articles by title"
               fullWidth
               slotProps={{
                 input: {
@@ -349,7 +352,7 @@ RealityLife News          </Typography>
             />
 
             <Typography sx={{ color: "#c9c9c9", fontWeight: 700, textAlign: { xs: "left", md: "right" } }}>
-              Showing {paginatedPosts.length} of {filteredPosts.length} posts
+              Showing {paginatedPosts.length} of {filteredPosts.length} blog articles
             </Typography>
           </Paper>
         )}
@@ -369,7 +372,7 @@ RealityLife News          </Typography>
               textAlign: "center",
             }}
           >
-            No posts match "{searchTerm}".
+            No blog articles match "{searchTerm}".
           </Paper>
         )}
 
@@ -414,7 +417,7 @@ RealityLife News          </Typography>
                 {/* IMAGE */}
                 <Box
                   component="img"
-                  src={post.image}
+                  src={post.image || post.images?.[0]}
                   alt={post.title}
                   sx={{
                     width: "100%",
@@ -446,6 +449,9 @@ RealityLife News          </Typography>
                   </Typography>
 
                   <Button
+                    component={RouterLink}
+                    to={`/blog/${post._id || post.id}`}
+                    disabled={!post._id && !post.id}
                     sx={{
                       mt: 2,
                       alignSelf: "flex-start",

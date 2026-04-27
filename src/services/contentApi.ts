@@ -1,6 +1,7 @@
 import { API_BASE_URL } from "../config/api";
 
 export const NEWS_ENDPOINT = `${API_BASE_URL}/api/news`;
+export const POSTS_ENDPOINT = `${API_BASE_URL}/api/posts`;
 export const UPCOMING_EVENTS_ENDPOINTS = [
   `${API_BASE_URL}/api/upcoming-events`,
   `${API_BASE_URL}/api/events`,
@@ -13,6 +14,18 @@ export type NewsItem = {
   description: string;
   desc?: string;
   image: string;
+  createdAt?: string;
+};
+
+export type PostItem = {
+  _id?: string;
+  id?: string;
+  title: string;
+  type?: "Magazine" | "Book";
+  desc?: string;
+  description?: string;
+  image: string;
+  images?: string[];
   createdAt?: string;
 };
 
@@ -36,6 +49,13 @@ const normalizeEventItem = (item: EventItem): EventItem => ({
   ...item,
   description: item.description || item.desc || "",
   images: Array.isArray(item.images) ? item.images : [],
+});
+
+const normalizePostItem = (item: PostItem): PostItem => ({
+  ...item,
+  desc: item.desc || item.description || "",
+  image: item.image || item.images?.[0] || "",
+  images: Array.isArray(item.images) ? item.images : item.image ? [item.image] : [],
 });
 
 export const normalizeCollection = <T,>(payload: unknown): T[] => {
@@ -101,6 +121,9 @@ export const loadNews = async () =>
 
 export const loadNewsById = async (id: string) =>
   normalizeNewsItem(await requestJson<NewsItem>([`${NEWS_ENDPOINT}/${id}`], undefined, "Unable to load news item."));
+
+export const loadPostById = async (id: string) =>
+  normalizePostItem(await requestJson<PostItem>([`${POSTS_ENDPOINT}/${id}`], undefined, "Unable to load post."));
 
 export const loadUpcomingEvents = async () =>
   normalizeCollection<EventItem>(

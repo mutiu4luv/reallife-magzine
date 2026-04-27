@@ -11,6 +11,7 @@ import AdminScreen from "./screens/AdminScreen";
 import UpcomingEventNotice from "./components/UpcomingEventNotice";
 import NewsScreen from "./screens/NewsScreen";
 import UpcomingEventsScreen from "./screens/UpcomingEventsScreen";
+import ContentDetailScreen from "./screens/ContentDetailScreen";
 
 function App() {
 
@@ -28,8 +29,11 @@ function App() {
         <Route path="/contact" element={<ContactUsScreen />} />
         <Route path="/profile" element={<ProfileScreen/>} />
         <Route path="/blog" element={<BlogScreen />} />
+        <Route path="/blog/:id" element={<ContentDetailScreen kind="post" />} />
         <Route path="/news" element={<NewsScreen />} />
+        <Route path="/news/:id" element={<ContentDetailScreen kind="news" />} />
         <Route path="/events" element={<UpcomingEventsScreen />} />
+        <Route path="/events/:id" element={<ContentDetailScreen kind="event" />} />
         <Route path="/admin" element={<AdminScreen />} />
 
       {/* </Route> */}
