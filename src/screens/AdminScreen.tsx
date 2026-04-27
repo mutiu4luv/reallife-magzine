@@ -449,45 +449,26 @@ const AdminScreen: React.FC = () => {
       return;
     }
 
-    const buildBlogFormData = (useMultipleImages: boolean) => {
+    const buildBlogFormData = () => {
       const blogFormData = new FormData();
       blogFormData.set("title", title);
       blogFormData.set("desc", desc);
       blogFormData.set("type", type);
       blogFormData.set("image", imageFiles[0]);
 
-      if (useMultipleImages) {
-        imageFiles.slice(1).forEach((image) => {
-          blogFormData.append("images", image);
-        });
-      }
-
       return blogFormData;
     };
 
     setIsSavingPost(true);
     try {
-      let createdPost: Post;
-
-      try {
-        createdPost = await requestJson<Post>(
-          [POST_ENDPOINT],
-          {
-            method: "POST",
-            body: buildBlogFormData(true),
-          },
-          "Unable to publish blog."
-        );
-      } catch (error) {
-        createdPost = await requestJson<Post>(
-          [POST_ENDPOINT],
-          {
-            method: "POST",
-            body: buildBlogFormData(false),
-          },
-          error instanceof Error ? error.message : "Unable to publish blog."
-        );
-      }
+      const createdPost = await requestJson<Post>(
+        [POST_ENDPOINT],
+        {
+          method: "POST",
+          body: buildBlogFormData(),
+        },
+        "Unable to publish blog."
+      );
 
       setPosts((currentPosts) => [createdPost, ...currentPosts]);
       postFormRef.current?.reset();
@@ -922,7 +903,7 @@ const AdminScreen: React.FC = () => {
                       "&:hover": { borderColor: "#caa64a", bgcolor: "#f7edd0" },
                     }}
                   >
-                    Select blog images
+                    Select blog image
                     <input
                       hidden
                       required
@@ -939,8 +920,13 @@ const AdminScreen: React.FC = () => {
                     />
                   </Button>
                   <Typography sx={{ color: "#667085", fontSize: 13, mt: 1 }}>
-                    {selectedBlogImageNames || "No images selected"}
+                    {selectedBlogImageNames || "No image selected"}
                   </Typography>
+                  {selectedBlogImageNames.includes(",") && (
+                    <Typography sx={{ color: "#b45309", fontSize: 13, mt: 0.5 }}>
+                      The current backend accepts one blog image, so only the first selected image will be uploaded.
+                    </Typography>
+                  )}
                 </Box>
 
                 <Button
