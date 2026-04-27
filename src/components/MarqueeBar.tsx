@@ -7,7 +7,7 @@ const MarqueeBar: React.FC = () => {
   return (
     <Box
       sx={{
-        height: "10vh",
+        minHeight: { xs: 52, md: 68 },
         bgcolor: "#A67C1B",
         display: "flex",
         alignItems: "center",
@@ -27,14 +27,14 @@ const MarqueeBar: React.FC = () => {
       >
         {/* First copy */}
         <Typography
-          sx={{ fontWeight: "bold", letterSpacing: "3px", px: 4 }}
+          sx={{ fontWeight: "bold", letterSpacing: { xs: "1px", md: "3px" }, px: { xs: 2, md: 4 }, fontSize: { xs: 13, sm: 15, md: 16 } }}
         >
           {text}
         </Typography>
 
         {/* Second copy (required for seamless loop) */}
         <Typography
-          sx={{ fontWeight: "bold", letterSpacing: "3px", px: 4 }}
+          sx={{ fontWeight: "bold", letterSpacing: { xs: "1px", md: "3px" }, px: { xs: 2, md: 4 }, fontSize: { xs: 13, sm: 15, md: 16 } }}
         >
           {text}
         </Typography>

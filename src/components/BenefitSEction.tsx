@@ -4,6 +4,7 @@ import {
   Typography,
   Card,
   CardContent,
+  Container,
 } from "@mui/material";
 import { motion } from "framer-motion";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
@@ -39,19 +40,21 @@ const BenefitSection: React.FC = () => {
       id="benefits"
       sx={{
         py: { xs: 6, md: 10 },
-        px: { xs: 2, md: 8 },
+        px: { xs: 2, sm: 3 },
         textAlign: "center",
         backgroundColor: "#ffffff",
         color: "#111",
       }}
     >
+      <Container maxWidth="lg" disableGutters>
       {/* Heading */}
-      <Box sx={{ position: "relative", display: "inline-block", mb: 6 }}>
+      <Box sx={{ position: "relative", display: "inline-block", mb: { xs: 4, md: 6 }, maxWidth: "100%" }}>
         <Typography
           variant="h4"
           sx={{
             fontWeight: 800,
-            fontSize: { xs: "1.8rem", md: "2.5rem" },
+            fontSize: { xs: "1.65rem", sm: "2rem", md: "2.5rem" },
+            lineHeight: 1.15,
             color: gold,
             textTransform: "uppercase",
           }}
@@ -85,7 +88,7 @@ const BenefitSection: React.FC = () => {
         sx={{
           maxWidth: 750,
           mx: "auto",
-          mb: 6,
+          mb: { xs: 4, md: 6 },
           fontSize: { xs: "1rem", md: "1.1rem" },
           color: "rgba(0,0,0,0.7)",
         }}
@@ -94,27 +97,20 @@ const BenefitSection: React.FC = () => {
         delivering stories that inform, inspire, and connect readers globally.
       </Typography>
 
-      {/* GRID FIX (3 cards always fit on desktop) */}
       <Box
   sx={{
-    display: "flex",
-    flexWrap: "wrap",
-    justifyContent: "center",
-    gap: 4,
+    display: "grid",
+    gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", md: "repeat(3, minmax(0, 1fr))" },
+    gap: { xs: 2.5, md: 4 },
   }}
 >
   {benefits.map((item, index) => (
     <Box
       key={index}
       sx={{
-        flex: {
-          xs: "100%",
-          sm: "45%",
-          md: "30%",
-        },
         display: "flex",
         justifyContent: "center",
-        mb: 3,
+        minWidth: 0,
       }}
     >
       <motion.div
@@ -145,10 +141,10 @@ const BenefitSection: React.FC = () => {
         <Card
           sx={{
             height: "100%",
-            maxWidth: 320,
+            maxWidth: { xs: 420, md: "none" },
             width: "100%",
             p: 3,
-            borderRadius: 4,
+            borderRadius: 2,
             backgroundColor: "#000",
             color: "#fff",
             textAlign: "center",
@@ -182,7 +178,8 @@ const BenefitSection: React.FC = () => {
               sx={{
                 color: "#fff",
                 fontSize: { xs: "0.9rem", md: "1rem" },
-                textAlign: "justify",
+                textAlign: "left",
+                lineHeight: 1.7,
               }}
             >
               {item.description}
@@ -193,6 +190,7 @@ const BenefitSection: React.FC = () => {
     </Box>
   ))}
 </Box>
+      </Container>
     </Box>
   );
 };

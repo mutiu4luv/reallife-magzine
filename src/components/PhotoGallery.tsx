@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { Box, Typography, IconButton } from "@mui/material";
+import React, { useCallback, useEffect, useState } from "react";
+import { Box, Typography, IconButton, Container } from "@mui/material";
 import KeyboardArrowLeftIcon from "@mui/icons-material/KeyboardArrowLeft";
 import KeyboardArrowRightIcon from "@mui/icons-material/KeyboardArrowRight";
 import { motion } from "framer-motion"; // ✅ Import motion
@@ -19,9 +19,9 @@ const PhotoGallery: React.FC = () => {
 
   useEffect(() => {
     const handleResize = () => {
-      if (window.innerWidth < 600) setItemsToShow(1);
-      else if (window.innerWidth < 960) setItemsToShow(2);
-      else setItemsToShow(3);
+      const nextItemsToShow = window.innerWidth < 600 ? 1 : window.innerWidth < 960 ? 2 : 3;
+      setItemsToShow(nextItemsToShow);
+      setCurrent((value) => Math.min(value, Math.max(images.length - nextItemsToShow, 0)));
     };
     
     handleResize();
@@ -29,25 +29,26 @@ const PhotoGallery: React.FC = () => {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  const maxIndex = images.length - itemsToShow;
+  const maxIndex = Math.max(images.length - itemsToShow, 0);
 
-  const next = () => {
+  const next = useCallback(() => {
     setCurrent((p) => (p >= maxIndex ? 0 : p + 1));
-  };
+  }, [maxIndex]);
 
-  const prev = () => {
+  const prev = useCallback(() => {
     setCurrent((p) => (p <= 0 ? maxIndex : p - 1));
-  };
+  }, [maxIndex]);
 
   useEffect(() => {
     const id = setInterval(next, 4000);
     return () => clearInterval(id);
-  }, [itemsToShow, maxIndex]);
+  }, [next]);
 
   return (
-    <Box sx={{ bgcolor: "#fff", py: 10, px: { xs: 2, md: 8 } }}>
+    <Box sx={{ bgcolor: "#fff", py: { xs: 7, md: 10 }, px: { xs: 2, sm: 3 } }}>
+      <Container maxWidth="lg" disableGutters>
       {/* Heading Section */}
-      <Box sx={{ textAlign: "center", mb: 6 }}>
+      <Box sx={{ textAlign: "center", mb: { xs: 4, md: 6 } }}>
         <Typography
           variant="h4"
           sx={{
@@ -55,7 +56,8 @@ const PhotoGallery: React.FC = () => {
             fontWeight: 800,
             textTransform: "uppercase",
             letterSpacing: 2,
-            fontSize: { xs: "1.8rem", md: "2.4rem" },
+            fontSize: { xs: "1.65rem", sm: "2rem", md: "2.4rem" },
+            lineHeight: 1.15,
           }}
         >
           Photo Gallery
@@ -101,9 +103,9 @@ const PhotoGallery: React.FC = () => {
         <Box
           sx={{
             width: "100%",
-            height: { xs: 220, md: 280 },
+            height: { xs: 230, sm: 260, md: 300 },
             overflow: "hidden",
-            borderRadius: 3,
+            borderRadius: 2,
           }}
         >
           <Box
@@ -132,7 +134,7 @@ const PhotoGallery: React.FC = () => {
                     width: "100%",
                     height: "100%",
                     objectFit: "cover",
-                    borderRadius: 3,
+                    borderRadius: 2,
                     boxShadow: "0 4px 15px rgba(0,0,0,0.1)",
                   }}
                 />
@@ -147,7 +149,7 @@ const PhotoGallery: React.FC = () => {
           sx={{
             position: "absolute",
             top: "50%",
-            left: { xs: -5, md: -20 },
+            left: { xs: 8, md: -18 },
             transform: "translateY(-50%)",
             bgcolor: "#fff",
             boxShadow: "0 4px 10px rgba(0,0,0,0.2)",
@@ -163,7 +165,7 @@ const PhotoGallery: React.FC = () => {
           sx={{
             position: "absolute",
             top: "50%",
-            right: { xs: -5, md: -20 },
+            right: { xs: 8, md: -18 },
             transform: "translateY(-50%)",
             bgcolor: "#fff",
             boxShadow: "0 4px 10px rgba(0,0,0,0.2)",
@@ -174,6 +176,7 @@ const PhotoGallery: React.FC = () => {
           <KeyboardArrowRightIcon />
         </IconButton>
       </Box>
+      </Container>
     </Box>
   );
 };

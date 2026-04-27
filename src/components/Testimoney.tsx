@@ -6,6 +6,7 @@ import {
   CardContent,
   Avatar,
   Button,
+  Container,
 } from "@mui/material";
 import { motion } from "framer-motion";
 import heroPng from "../assets/hero.png";
@@ -82,12 +83,12 @@ const TestimonyCard: React.FC<{
         delay: index * 0.1,
       }}
       viewport={{ once: false, amount: 0.3 }}
-      style={{ width: "100%", maxWidth: "320px" }}
+      style={{ width: "100%" }}
     >
       <Card
         sx={{
           p: 2.5,
-          borderRadius: 4,
+          borderRadius: 2,
           bgcolor: "#111",
           color: "#fff",
           height: "100%",
@@ -129,7 +130,7 @@ const TestimonyCard: React.FC<{
             </Avatar>
             <Typography
               variant="subtitle1"
-              sx={{ fontWeight: 700, color: gold }}
+              sx={{ fontWeight: 700, color: gold, overflowWrap: "anywhere" }}
             >
               {item.name}
             </Typography>
@@ -175,6 +176,7 @@ const TestimonyCard: React.FC<{
               minHeight: 72,
               borderBottom: `1px solid rgba(166,124,27,0.3)`,
               pb: 1,
+              overflowWrap: "anywhere",
             }}
           >
             "{expanded ? item.message : truncate(item.message)}"
@@ -213,13 +215,14 @@ const TestimonySection: React.FC = () => {
     <Box
       sx={{
         py: { xs: 8, md: 12 },
-        px: { xs: 3, md: 10 },
+        px: { xs: 2, sm: 3 },
         textAlign: "center",
         bgcolor: "#000",
         overflow: "hidden",
       }}
     >
-   <Box sx={{ display: "inline-block", mb: 8 }}>
+      <Container maxWidth="lg" disableGutters>
+   <Box sx={{ display: "inline-block", mb: { xs: 5, md: 8 }, maxWidth: "100%" }}>
   <Typography
     variant="h4"
     sx={{
@@ -227,7 +230,8 @@ const TestimonySection: React.FC = () => {
       color: gold,
       textTransform: "uppercase",
       letterSpacing: "2px",
-      fontSize: { xs: "1.6rem", md: "2.2rem" },
+      fontSize: { xs: "1.55rem", sm: "1.9rem", md: "2.2rem" },
+      lineHeight: 1.15,
       mb: 1,
     }}
   >
@@ -265,27 +269,26 @@ const TestimonySection: React.FC = () => {
 
       <Box
         sx={{
-          display: "flex",
-          flexDirection: "row",
-          flexWrap: "wrap",
-          justifyContent: "center",
-          rowGap: { xs: 6, md: 8 },
-          columnGap: { xs: 2, md: 10 },
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", md: "repeat(3, minmax(0, 1fr))" },
+          gap: { xs: 3, md: 4 },
         }}
       >
         {randomThree.map((item, index) => (
           <Box
             key={index}
             sx={{
-              flex: { xs: "100%", sm: "45%", md: "25%" },
               display: "flex",
               justifyContent: "center",
+              minWidth: 0,
+              "& > div": { maxWidth: { xs: 420, md: "none" } },
             }}
           >
             <TestimonyCard item={item} index={index} />
           </Box>
         ))}
       </Box>
+      </Container>
     </Box>
   );
 };

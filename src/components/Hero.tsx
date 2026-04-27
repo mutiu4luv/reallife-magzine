@@ -11,33 +11,30 @@ const Hero: React.FC = () => {
     <Box
       sx={{
         position: "relative",
-        minHeight: "100vh",
+        minHeight: { xs: "calc(100svh - 72px)", md: "calc(100svh - 96px)" },
         display: "flex",
         alignItems: "center",
         color: "#fff",
-        backgroundColor: "#0a1929", // fallback color for empty spaces
+        backgroundColor: "#0a1929",
         backgroundImage: `
           linear-gradient(rgba(10, 25, 41, 0.85), rgba(10, 25, 41, 0.85)),
           url(${heroImage})
         `,
         backgroundRepeat: "no-repeat",
-        backgroundPosition: "center",
-        backgroundSize: {
-          xs: "contain", // ✅ show full image on mobile
-          md: "cover",   // ✅ fill screen nicely on larger screens
-        },
-        px: 2,
+        backgroundPosition: { xs: "center top", md: "center" },
+        backgroundSize: "cover",
+        px: { xs: 0, sm: 2 },
+        py: { xs: 8, sm: 10, md: 12 },
       }}
     >
       <Container maxWidth="lg">
-        <Stack spacing={4} sx={{ maxWidth: "800px" }}>
+        <Stack spacing={{ xs: 3, md: 4 }} sx={{ maxWidth: { xs: 560, md: 800 } }}>
         <Typography
   variant="h2"
   sx={{
     fontWeight: 800,
-    fontSize: { xs: "2.3rem", md: "3.8rem" },
-    lineHeight: 1.2,
-    letterSpacing: "-0.02em",
+    fontSize: { xs: "2.1rem", sm: "2.8rem", md: "3.8rem" },
+    lineHeight: { xs: 1.12, md: 1.2 },
   }}
 >
   <Typewriter
@@ -56,14 +53,15 @@ const Hero: React.FC = () => {
               color: "rgba(255,255,255,0.9)",
               lineHeight: 1.8,
               fontWeight: 400,
-              fontSize: { xs: "1rem", md: "1.15rem" },
+              fontSize: { xs: "1rem", sm: "1.08rem", md: "1.15rem" },
+              maxWidth: 680,
             }}
           >
             RealityLife Magazine  Amplifying voices, shaping narratives, and
             documenting today for tomorrow’s legacy.
           </Typography>
 
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ alignItems: { xs: "stretch", sm: "flex-start" } }}>
             <Button
               variant="contained"
               size="large"
@@ -71,7 +69,7 @@ const Hero: React.FC = () => {
               sx={{
                 backgroundColor: "#4F46E5",
                 borderRadius: "50px",
-                px: 5,
+                px: { xs: 3, sm: 5 },
                 py: 1.6,
                 fontWeight: 700,
                 textTransform: "none",
@@ -94,7 +92,7 @@ const Hero: React.FC = () => {
                 borderColor: "#fff",
                 color: "#fff",
                 borderRadius: "50px",
-                px: 5,
+                px: { xs: 3, sm: 5 },
                 py: 1.6,
                 fontWeight: 700,
                 textTransform: "none",

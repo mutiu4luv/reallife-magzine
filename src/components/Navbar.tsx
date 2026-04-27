@@ -36,7 +36,9 @@ const Navbar: React.FC = () => {
           sx={{
             display: "flex",
             justifyContent: "space-between",
-            minHeight: { xs: 80, md: 100 },
+            minHeight: { xs: 72, sm: 80, md: 96 },
+            px: { xs: 2, sm: 3, md: 5 },
+            gap: 2,
           }}
         >
           <Box
@@ -45,19 +47,20 @@ const Navbar: React.FC = () => {
             alt="Logo"
             onClick={() => navigate("/")}
             sx={{
-              height: { xs: 70, md: 80 },
-              width: { xs: 140, md: 180 },
+              height: { xs: 58, sm: 68, md: 80 },
+              width: { xs: 116, sm: 146, md: 180 },
               objectFit: "contain",
               cursor: "pointer",
+              flexShrink: 0,
             }}
           />
 
-          <Box sx={{ display: { xs: "none", md: "flex" }, gap: 4 }}>
+          <Box sx={{ display: { xs: "none", md: "flex" }, gap: { md: 1.5, lg: 3 } }}>
             {navLinks.map((link) => (
               <Button
                 key={link.label}
                 onClick={() => navigate(link.path)}
-                sx={{ color: "#fff", "&:hover": { color: "#FFD700" } }}
+                sx={{ color: "#fff", minWidth: 0, px: { md: 1, lg: 1.5 }, "&:hover": { color: "#FFD700" } }}
               >
                 {link.label}
               </Button>
@@ -74,7 +77,7 @@ const Navbar: React.FC = () => {
       </AppBar>
 
       <Drawer anchor="right" open={open} onClose={() => setOpen(false)}>
-        <Box sx={{ width: 260, bgcolor: "#fff", height: "100%", pt: 4 }}>
+        <Box sx={{ width: { xs: "min(82vw, 280px)", sm: 300 }, bgcolor: "#fff", height: "100%", pt: 4 }}>
           <List>
             {navLinks.map((link) => (
               <ListItem key={link.label} disablePadding>

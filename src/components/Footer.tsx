@@ -35,14 +35,14 @@ const Footer: React.FC = () => {
         {/* Top Section */}
         <Box
           sx={{
-            display: "flex",
-            flexWrap: "wrap",
-            justifyContent: "space-between",
-            gap: 6,
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", sm: "1.2fr 0.8fr", md: "1.4fr 0.7fr 1fr" },
+            gap: { xs: 4, md: 6 },
+            alignItems: "start",
           }}
         >
           {/* Brand */}
-          <Box sx={{ maxWidth: 360 }}>
+          <Box sx={{ maxWidth: { xs: "none", md: 380 }, minWidth: 0 }}>
             <Typography
               sx={{
                 fontSize: "1.5rem",
@@ -61,7 +61,7 @@ const Footer: React.FC = () => {
           </Box>
 
           {/* Quick Links */}
-          <Box>
+          <Box sx={{ minWidth: 0 }}>
             <Typography sx={{ color: gold, fontWeight: 600, mb: 2 }}>
               Quick Links
             </Typography>
@@ -84,11 +84,11 @@ const Footer: React.FC = () => {
           </Box>
 
           {/* Contact */}
-          <Box>
+          <Box sx={{ minWidth: 0, gridColumn: { xs: "auto", sm: "1 / -1", md: "auto" } }}>
             <Typography sx={{ color: gold, fontWeight: 600, mb: 2 }}>
               Contact
             </Typography>
-            <Typography sx={{ color: "#bbb" }}>
+            <Typography sx={{ color: "#bbb", overflowWrap: "anywhere" }}>
               Email: realitylifemagazine@gmail.com
             </Typography>
             <Typography sx={{ color: "#bbb", mb: 2 }}>

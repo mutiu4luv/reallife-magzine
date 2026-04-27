@@ -7,13 +7,15 @@ const Reallife: React.FC = () => {
     <Box
       component="section"
       sx={{
-        height: { xs: "60vh", md: "80vh" },
+        minHeight: { xs: "auto", md: "72vh" },
         position: "relative",
         backgroundColor: "#000",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         overflow: "hidden",
+        py: { xs: 8, sm: 10, md: 12 },
+        px: { xs: 2, sm: 3 },
       }}
     >
       {/* Subtle glow effect */}
@@ -32,8 +34,8 @@ const Reallife: React.FC = () => {
         sx={{
           textAlign: "left",
           zIndex: 2,
-          px: 3,
-          maxWidth: "900px",
+          width: "100%",
+          maxWidth: 900,
         }}
       >
         {/* Title */}
@@ -42,9 +44,9 @@ const Reallife: React.FC = () => {
           sx={{
             fontWeight: 800,
             color: "#fff",
-            fontSize: { xs: "1.8rem", md: "3rem" },
+            fontSize: { xs: "1.85rem", sm: "2.4rem", md: "3rem" },
+            lineHeight: 1.15,
             mb: 2,
-            letterSpacing: "1px",
           }}
         >
           <Typewriter
@@ -60,9 +62,10 @@ const Reallife: React.FC = () => {
         <Typography
           sx={{
             color: "#cfcfcf",
-            fontSize: { xs: "1rem", md: "1.2rem" },
-            lineHeight: 1.8,
+            fontSize: { xs: "1rem", md: "1.16rem" },
+            lineHeight: { xs: 1.7, md: 1.8 },
             fontWeight: 300,
+            textAlign: { xs: "left", md: "justify" },
           }}
         >
           RealityLife Magazine is more than a publication it is a voice, a

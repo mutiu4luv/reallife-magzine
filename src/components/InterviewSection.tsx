@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Box, Typography, Card, CardContent, Button } from "@mui/material";
+import { Box, Typography, Card, CardContent, Button, Container } from "@mui/material";
 import { motion } from "framer-motion";
 
 import i1 from "../assets/interview1.jpeg";
@@ -128,21 +128,23 @@ const InterviewSection: React.FC = () => {
     <Box
       sx={{
         py: { xs: 8, md: 12 },
-        px: { xs: 3, md: 10 },
+        px: { xs: 2, sm: 3 },
         textAlign: "center",
         bgcolor: "#fff",
         overflow: "hidden",
       }}
     >
+      <Container maxWidth="lg" disableGutters>
       {/* Heading */}
-      <Box sx={{ display: "inline-block", mb: 6 }}>
+      <Box sx={{ display: "inline-block", mb: { xs: 4, md: 6 }, maxWidth: "100%" }}>
         <Typography
           sx={{
             fontWeight: 900,
             color: gold,
             textTransform: "uppercase",
             letterSpacing: "2px",
-            fontSize: { xs: "1.6rem", md: "2.2rem" },
+            fontSize: { xs: "1.55rem", sm: "1.9rem", md: "2.2rem" },
+            lineHeight: 1.15,
             mb: 1,
           }}
         >
@@ -192,10 +194,10 @@ const InterviewSection: React.FC = () => {
       {/* Cards */}
       <Box
   sx={{
-    display: "flex",
-    flexWrap: { xs: "wrap", md: "nowrap" }, // horizontal row on desktop
+    display: "grid",
+    gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(3, minmax(0, 1fr))" },
     justifyContent: "center",
-    gap: { xs: 4, md: 6 },
+    gap: { xs: 3, md: 4 },
   }}
 >
   {randomThree.map((item, index) => {
@@ -207,24 +209,22 @@ const InterviewSection: React.FC = () => {
         whileInView={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, delay: index * 0.2 }}
         style={{
-          width: "320px",
-          minWidth: "320px",
-          maxWidth: "340px",
+          width: "100%",
+          minWidth: 0,
           display: "flex",
-          flex: "1 1 0%",
         }}
       >
         <Card
           sx={{
             width: "100%",
-            borderRadius: 3,
+            borderRadius: 2,
             backgroundColor: "#111",
             color: "#fff",
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
             transition: "0.3s",
-            minHeight: 600,
+            minHeight: { xs: "auto", md: 600 },
             "&:hover": {
               transform: "translateY(-10px)",
               boxShadow: `0 10px 25px rgba(166,124,27,0.25)`,
@@ -237,7 +237,7 @@ const InterviewSection: React.FC = () => {
             alt={item.name}
             sx={{
               width: "100%",
-              height: 420,
+              height: { xs: 320, sm: 360, md: 400, lg: 420 },
               objectFit: "cover",
             }}
           />
@@ -248,6 +248,7 @@ const InterviewSection: React.FC = () => {
                 fontWeight: 700,
                 color: gold,
                 fontSize: "1.1rem",
+                overflowWrap: "anywhere",
               }}
             >
               {item.name}
@@ -266,10 +267,10 @@ const InterviewSection: React.FC = () => {
             {/* Q&A format */}
             {item.qa.slice(0, expanded ? item.qa.length : 1).map((qa, qidx) => (
               <Box key={qidx} sx={{ mb: 2 }}>
-                <Typography sx={{ color: gold, fontWeight: 600, fontSize: "0.98rem" }}>
+                <Typography sx={{ color: gold, fontWeight: 600, fontSize: "0.98rem", overflowWrap: "anywhere" }}>
                   Q: {qa.question}
                 </Typography>
-                <Typography sx={{ color: "#ddd", fontSize: "0.93rem", lineHeight: 1.6, fontStyle: "italic", mt: 0.5 }}>
+                <Typography sx={{ color: "#ddd", fontSize: "0.93rem", lineHeight: 1.6, fontStyle: "italic", mt: 0.5, overflowWrap: "anywhere" }}>
                   A: {qa.answer}
                 </Typography>
               </Box>
@@ -294,6 +295,7 @@ const InterviewSection: React.FC = () => {
     );
   })}
 </Box>
+      </Container>
     </Box>
   );
 };
