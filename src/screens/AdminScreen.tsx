@@ -6,6 +6,7 @@ import {
   Button,
   Checkbox,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -13,7 +14,6 @@ import {
   Divider,
   FormControlLabel,
   IconButton,
-  LinearProgress,
   MenuItem,
   Paper,
   Snackbar,
@@ -38,6 +38,7 @@ import { API_BASE_URL } from "../config/api";
 
 const POST_ENDPOINT = `${API_BASE_URL}/api/posts`;
 const EVENT_ENDPOINTS = [`${API_BASE_URL}/api/upcoming-events`, `${API_BASE_URL}/api/events`];
+const DATABASE_READY_RETRY_DELAYS = [700, 1400, 2400];
 
 type PostType = "Magazine" | "Book";
 
@@ -69,6 +70,10 @@ type PendingDelete =
 
 type ActiveView = "dashboard" | "posts" | "events";
 
+type RequestJsonOptions = {
+  retryDatabaseReady?: boolean;
+};
+
 const navItems = [
   { id: "dashboard", label: "Dashboard", icon: <Dashboard fontSize="small" /> },
   { id: "posts", label: "Posts", icon: <LibraryBooks fontSize="small" /> },
@@ -99,6 +104,19 @@ const getErrorMessage = async (response: Response, fallback: string) => {
   }
 };
 
+const wait = (delay: number) =>
+  new Promise((resolve) => {
+    window.setTimeout(resolve, delay);
+  });
+
+const isDatabaseReadinessError = (message: string) =>
+  message.toLowerCase().includes("database is not ready");
+
+const toAdminErrorMessage = (message: string) =>
+  isDatabaseReadinessError(message)
+    ? "The database is still starting. Please wait a moment and refresh again."
+    : message;
+
 const normalizeCollection = <T,>(payload: unknown): T[] => {
   if (Array.isArray(payload)) {
     return payload as T[];
@@ -115,34 +133,51 @@ const normalizeCollection = <T,>(payload: unknown): T[] => {
 const requestJson = async <T,>(
   endpoints: string[],
   init?: RequestInit,
-  fallback = "Request failed."
+  fallback = "Request failed.",
+  options: RequestJsonOptions = {}
 ) => {
   let lastError = fallback;
+  const isReadRequest = !init?.method || init.method.toUpperCase() === "GET";
+  const canRetryDatabaseReady = options.retryDatabaseReady ?? isReadRequest;
 
   for (const endpoint of endpoints) {
-    try {
-      const response = await fetch(endpoint, init);
+    for (let attempt = 0; attempt <= DATABASE_READY_RETRY_DELAYS.length; attempt += 1) {
+      try {
+        const response = await fetch(endpoint, init);
 
-      if (response.status === 404 && endpoint !== endpoints[endpoints.length - 1]) {
-        lastError = await getErrorMessage(response, fallback);
-        continue;
-      }
+        if (response.status === 404 && endpoint !== endpoints[endpoints.length - 1]) {
+          lastError = await getErrorMessage(response, fallback);
+          break;
+        }
 
-      if (!response.ok) {
-        throw new Error(await getErrorMessage(response, fallback));
-      }
+        if (!response.ok) {
+          throw new Error(await getErrorMessage(response, fallback));
+        }
 
-      const text = await response.text();
-      return (text ? JSON.parse(text) : undefined) as T;
-    } catch (error) {
-      lastError = error instanceof Error ? error.message : fallback;
-      if (endpoint === endpoints[endpoints.length - 1]) {
-        throw new Error(lastError);
+        const text = await response.text();
+        return (text ? JSON.parse(text) : undefined) as T;
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : fallback;
+        const shouldRetryDatabaseReady =
+          canRetryDatabaseReady &&
+          isDatabaseReadinessError(lastError) &&
+          attempt < DATABASE_READY_RETRY_DELAYS.length;
+
+        if (shouldRetryDatabaseReady) {
+          await wait(DATABASE_READY_RETRY_DELAYS[attempt]);
+          continue;
+        }
+
+        if (endpoint === endpoints[endpoints.length - 1]) {
+          throw new Error(toAdminErrorMessage(lastError));
+        }
+
+        break;
       }
     }
   }
 
-  throw new Error(lastError);
+  throw new Error(toAdminErrorMessage(lastError));
 };
 
 const formatDate = (value?: string) => {
@@ -156,6 +191,106 @@ const formatDate = (value?: string) => {
     year: "numeric",
   }).format(new Date(value));
 };
+
+const AdminLoader = () => (
+  <Paper
+    elevation={0}
+    sx={{
+      position: "relative",
+      overflow: "hidden",
+      minHeight: { xs: 280, md: 360 },
+      border: "1px solid #e6e8ec",
+      borderRadius: 2,
+      bgcolor: "#111318",
+      color: "#fff",
+      display: "grid",
+      placeItems: "center",
+      px: 3,
+      isolation: "isolate",
+      "&::before": {
+        content: '""',
+        position: "absolute",
+        inset: -160,
+        background:
+          "radial-gradient(circle at 30% 30%, rgba(202,166,74,0.34), transparent 32%), radial-gradient(circle at 70% 62%, rgba(96,165,250,0.22), transparent 34%)",
+        animation: "adminLoaderGlow 5.5s ease-in-out infinite alternate",
+        zIndex: -2,
+      },
+      "&::after": {
+        content: '""',
+        position: "absolute",
+        inset: 0,
+        background:
+          "linear-gradient(135deg, rgba(255,255,255,0.08), transparent 34%, rgba(255,255,255,0.04))",
+        zIndex: -1,
+      },
+      "@keyframes adminLoaderGlow": {
+        "0%": { transform: "translate3d(-3%, -2%, 0) scale(1)" },
+        "100%": { transform: "translate3d(3%, 2%, 0) scale(1.08)" },
+      },
+      "@keyframes adminLoaderPulse": {
+        "0%, 100%": { opacity: 0.42, transform: "scaleX(0.72)" },
+        "50%": { opacity: 1, transform: "scaleX(1)" },
+      },
+    }}
+  >
+    <Stack spacing={2.5} sx={{ alignItems: "center", textAlign: "center", maxWidth: 420 }}>
+      <Box sx={{ position: "relative", width: 112, height: 112, display: "grid", placeItems: "center" }}>
+        <CircularProgress
+          size={108}
+          thickness={2.6}
+          sx={{ position: "absolute", color: "#caa64a" }}
+        />
+        <CircularProgress
+          size={82}
+          thickness={2.2}
+          variant="determinate"
+          value={74}
+          sx={{ position: "absolute", color: "rgba(255,255,255,0.26)", transform: "rotate(142deg)" }}
+        />
+        <Box
+          sx={{
+            width: 58,
+            height: 58,
+            borderRadius: 1.5,
+            display: "grid",
+            placeItems: "center",
+            bgcolor: "#caa64a",
+            color: "#111318",
+            boxShadow: "0 16px 44px rgba(0,0,0,0.28)",
+          }}
+        >
+          <AutoStories />
+        </Box>
+      </Box>
+
+      <Box>
+        <Typography sx={{ fontSize: { xs: 24, md: 30 }, lineHeight: 1.1, fontWeight: 900 }}>
+          Preparing admin studio
+        </Typography>
+        <Typography sx={{ color: "#cbd5e1", mt: 1, fontSize: 15 }}>
+          Loading posts, events, and database records.
+        </Typography>
+      </Box>
+
+      <Box sx={{ display: "flex", gap: 0.75, width: 172, justifyContent: "center" }} aria-hidden="true">
+        {[0, 1, 2].map((item) => (
+          <Box
+            key={item}
+            sx={{
+              width: 46,
+              height: 4,
+              borderRadius: 999,
+              bgcolor: item === 1 ? "#caa64a" : "rgba(255,255,255,0.36)",
+              transformOrigin: "center",
+              animation: `adminLoaderPulse 1.2s ease-in-out ${item * 0.16}s infinite`,
+            }}
+          />
+        ))}
+      </Box>
+    </Stack>
+  </Paper>
+);
 
 const AdminScreen: React.FC = () => {
   const postFormRef = useRef<HTMLFormElement>(null);
@@ -197,7 +332,13 @@ const AdminScreen: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    loadAdminData();
+    const loadTimer = window.setTimeout(() => {
+      void loadAdminData();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(loadTimer);
+    };
   }, [loadAdminData]);
 
   const handlePostSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -496,8 +637,10 @@ const AdminScreen: React.FC = () => {
             </Button>
           </Box>
 
-          {isLoading && <LinearProgress sx={{ bgcolor: "#eceff3", "& .MuiLinearProgress-bar": { bgcolor: "#caa64a" } }} />}
-
+          {isLoading ? (
+            <AdminLoader />
+          ) : (
+            <>
           {activeView === "dashboard" && (
             <Box
               sx={{
@@ -810,6 +953,8 @@ const AdminScreen: React.FC = () => {
             </Paper>
             )}
           </Box>
+          )}
+            </>
           )}
         </Stack>
       </Box>
