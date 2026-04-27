@@ -1,5 +1,26 @@
 # React + TypeScript + Vite
 
+## RealityLife Content APIs
+
+The frontend reads content from `VITE_API_BASE_URL`, falling back to `http://localhost:5000` in development.
+
+Run the local upload backend:
+
+```bash
+cd server
+npm install
+npm run dev
+```
+
+Available upload endpoints:
+
+- `POST /api/news` with multipart fields `image`, `title`, and `description`
+- `GET /api/news`
+- `DELETE /api/news/:id`
+- `POST /api/upcoming-events` with multipart fields `images` (multiple), `title`, `description`, and optional `isActive`
+- `GET /api/upcoming-events`
+- `DELETE /api/upcoming-events/:id`
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:
