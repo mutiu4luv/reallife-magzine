@@ -8,7 +8,7 @@ import ContactUsScreen from "./screens/Contact";
 import ProfileScreen from "./screens/ProfileScreen";
 import BlogScreen from "./screens/blogScreen";
 import AdminScreen from "./screens/AdminScreen";
-import UpcomingEventNotice from "./components/UpcomingEventNotice";
+// import UpcomingEventNotice from "./components/UpcomingEventNotice";
 import NewsScreen from "./screens/NewsScreen";
 import UpcomingEventsScreen from "./screens/UpcomingEventsScreen";
 import ContentDetailScreen from "./screens/ContentDetailScreen";
@@ -18,7 +18,7 @@ function App() {
   return (
     <>
       <Navbar />
-      <UpcomingEventNotice />
+      {/* <UpcomingEventNotice /> */}
       {/* <LandingPage /> */}
 
       <Routes>
