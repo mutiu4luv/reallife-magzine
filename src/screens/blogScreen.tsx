@@ -18,6 +18,8 @@ import Footer from "../components/Footer";
 import { API_BASE_URL } from "../config/api";
 
 const gold = "#A67C1B";
+const POSTS_ENDPOINT = `${API_BASE_URL}/api/posts`;
+const POST_RETRY_DELAYS = [700, 1400, 2400];
 
 /* ANIMATION */
 const fadeUp = {
@@ -46,6 +48,78 @@ const normalizePosts = (payload: unknown): Post[] => {
   }
 
   return [];
+};
+
+const wait = (delay: number) =>
+  new Promise((resolve) => {
+    window.setTimeout(resolve, delay);
+  });
+
+const getErrorMessage = async (response: Response, fallback: string) => {
+  try {
+    const data = await response.json();
+    return data?.error || data?.message || fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const shouldRetryPostLoad = (message: string) => {
+  const normalizedMessage = message.toLowerCase();
+  return (
+    normalizedMessage.includes("database is not ready") ||
+    normalizedMessage.includes("not modified") ||
+    normalizedMessage.includes("empty response")
+  );
+};
+
+const buildNoCacheUrl = (endpoint: string) => {
+  const url = new URL(endpoint);
+  url.searchParams.set("_", String(Date.now()));
+  return url.toString();
+};
+
+const loadBackendPosts = async () => {
+  let lastError = "Unable to load posts";
+
+  for (let attempt = 0; attempt <= POST_RETRY_DELAYS.length; attempt += 1) {
+    try {
+      const response = await fetch(buildNoCacheUrl(POSTS_ENDPOINT), {
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache",
+          Pragma: "no-cache",
+        },
+      });
+
+      if (response.status === 304) {
+        throw new Error("Posts returned a not modified response without data.");
+      }
+
+      if (!response.ok) {
+        throw new Error(await getErrorMessage(response, lastError));
+      }
+
+      const text = await response.text();
+      if (!text) {
+        throw new Error("Posts returned an empty response.");
+      }
+
+      return normalizePosts(JSON.parse(text));
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : lastError;
+      const canRetry = shouldRetryPostLoad(lastError) && attempt < POST_RETRY_DELAYS.length;
+
+      if (canRetry) {
+        await wait(POST_RETRY_DELAYS[attempt]);
+        continue;
+      }
+
+      throw new Error(lastError);
+    }
+  }
+
+  throw new Error(lastError);
 };
 
 const BlogLoader = () => (
@@ -149,13 +223,7 @@ const BlogScreen: React.FC = () => {
   useEffect(() => {
     const loadPosts = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/posts`);
-        if (!response.ok) {
-          throw new Error("Unable to load posts");
-        }
-
-        const data = await response.json();
-        setPosts(normalizePosts(data));
+        setPosts(await loadBackendPosts());
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unable to load posts");
       } finally {
