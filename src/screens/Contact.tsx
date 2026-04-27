@@ -1,5 +1,7 @@
-import React from "react";
+import React, { useState } from "react";
+import type { FormEvent } from "react";
 import {
+  Alert,
   Box,
   Container,
   Typography,
@@ -8,6 +10,7 @@ import {
   Paper,
   IconButton,
   Divider,
+  Snackbar,
 } from "@mui/material";
 
 import {
@@ -20,10 +23,93 @@ import {
   Instagram,
 } from "@mui/icons-material";
 import Footer from "../components/Footer";
+import { API_BASE_URL } from "../config/api";
 
 const gold = "#A67C1B";
+const CONTACT_ENDPOINTS = [
+  `${API_BASE_URL}/api/contact`,
+  `${API_BASE_URL}/api/contact-messages`,
+  `${API_BASE_URL}/api/contactMessages`,
+];
+
+type Feedback = {
+  severity: "success" | "error";
+  message: string;
+};
+
+const getErrorMessage = async (response: Response, fallback: string) => {
+  try {
+    const data = await response.json();
+    return data?.error || data?.message || fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const sendContactMessage = async (payload: { fullName: string; email: string; message: string }) => {
+  let lastError = "Unable to send message.";
+
+  for (const endpoint of CONTACT_ENDPOINTS) {
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (response.status === 404 && endpoint !== CONTACT_ENDPOINTS[CONTACT_ENDPOINTS.length - 1]) {
+        lastError = await getErrorMessage(response, lastError);
+        continue;
+      }
+
+      if (!response.ok) {
+        throw new Error(await getErrorMessage(response, lastError));
+      }
+
+      return;
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : lastError;
+      if (endpoint === CONTACT_ENDPOINTS[CONTACT_ENDPOINTS.length - 1]) {
+        throw new Error(lastError);
+      }
+    }
+  }
+};
 
 const ContactUsScreen: React.FC = () => {
+  const [isSending, setIsSending] = useState(false);
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const payload = {
+      fullName: String(formData.get("fullName") || "").trim(),
+      email: String(formData.get("email") || "").trim().toLowerCase(),
+      message: String(formData.get("message") || "").trim(),
+    };
+
+    if (!payload.fullName || !payload.email || !payload.message) {
+      setFeedback({ severity: "error", message: "Full name, email, and message are required." });
+      return;
+    }
+
+    setIsSending(true);
+    try {
+      await sendContactMessage(payload);
+      form.reset();
+      setFeedback({ severity: "success", message: "Message sent successfully." });
+    } catch (error) {
+      setFeedback({
+        severity: "error",
+        message: error instanceof Error ? error.message : "Unable to send message.",
+      });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   return (
     <>
     <Box sx={{ bgcolor: "white", minHeight: "100vh", color: "#fff", py: 8 }}>
@@ -84,6 +170,7 @@ const ContactUsScreen: React.FC = () => {
           {/* Contact Form */}
           <Box
             component="form"
+            onSubmit={handleSubmit}
             sx={{
               display: "flex",
               flexDirection: "column",
@@ -93,7 +180,10 @@ const ContactUsScreen: React.FC = () => {
             <TextField
               fullWidth
               label="Full Name"
+              name="fullName"
               variant="outlined"
+              required
+              disabled={isSending}
               sx={{
                 input: { color: "#fff" },
                 label: { color: "#bbb" },
@@ -108,7 +198,11 @@ const ContactUsScreen: React.FC = () => {
             <TextField
               fullWidth
               label="Email Address"
+              name="email"
+              type="email"
               variant="outlined"
+              required
+              disabled={isSending}
               sx={{
                 input: { color: "#fff" },
                 label: { color: "#bbb" },
@@ -123,9 +217,12 @@ const ContactUsScreen: React.FC = () => {
             <TextField
               fullWidth
               label="Message"
+              name="message"
               multiline
               rows={5}
               variant="outlined"
+              required
+              disabled={isSending}
               sx={{
                 textarea: { color: "#fff" },
                 label: { color: "#bbb" },
@@ -138,7 +235,9 @@ const ContactUsScreen: React.FC = () => {
             />
 
             <Button
+              type="submit"
               variant="contained"
+              disabled={isSending}
               sx={{
                 mt: 2,
                 bgcolor: gold,
@@ -149,7 +248,7 @@ const ContactUsScreen: React.FC = () => {
                 },
               }}
             >
-              Send Message
+              {isSending ? "Sending..." : "Send Message"}
             </Button>
           </Box>
 
@@ -253,6 +352,21 @@ const ContactUsScreen: React.FC = () => {
         <WhatsApp sx={{ color: "#fff", fontSize: 32 }} />
       </Box>
     </Box>
+    <Snackbar
+      open={Boolean(feedback)}
+      autoHideDuration={3600}
+      onClose={() => setFeedback(null)}
+      anchorOrigin={{ vertical: "top", horizontal: "right" }}
+    >
+      <Alert
+        severity={feedback?.severity || "success"}
+        onClose={() => setFeedback(null)}
+        variant="filled"
+        sx={{ width: "100%" }}
+      >
+        {feedback?.message}
+      </Alert>
+    </Snackbar>
     <Footer />
   </>
   );

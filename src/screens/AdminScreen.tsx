@@ -31,6 +31,7 @@ import {
   EventAvailable,
   Image,
   LibraryBooks,
+  Mail,
   Save,
   ToggleOn,
 } from "@mui/icons-material";
@@ -38,6 +39,11 @@ import { API_BASE_URL } from "../config/api";
 
 const POST_ENDPOINT = `${API_BASE_URL}/api/posts`;
 const EVENT_ENDPOINTS = [`${API_BASE_URL}/api/upcoming-events`, `${API_BASE_URL}/api/events`];
+const CONTACT_ENDPOINTS = [
+  `${API_BASE_URL}/api/contact`,
+  `${API_BASE_URL}/api/contact-messages`,
+  `${API_BASE_URL}/api/contactMessages`,
+];
 const DATABASE_READY_RETRY_DELAYS = [700, 1400, 2400];
 
 type PostType = "Magazine" | "Book";
@@ -58,6 +64,14 @@ type UpcomingEvent = {
   createdAt?: string;
 };
 
+type ContactMessage = {
+  _id?: string;
+  fullName: string;
+  email: string;
+  message: string;
+  createdAt?: string;
+};
+
 type Feedback = {
   severity: "success" | "error";
   message: string;
@@ -68,7 +82,7 @@ type PendingDelete =
   | { kind: "event"; item: UpcomingEvent }
   | null;
 
-type ActiveView = "dashboard" | "posts" | "events";
+type ActiveView = "dashboard" | "posts" | "events" | "messages";
 
 type RequestJsonOptions = {
   retryDatabaseReady?: boolean;
@@ -78,6 +92,7 @@ const navItems = [
   { id: "dashboard", label: "Dashboard", icon: <Dashboard fontSize="small" /> },
   { id: "posts", label: "Posts", icon: <LibraryBooks fontSize="small" /> },
   { id: "events", label: "Events", icon: <EventAvailable fontSize="small" /> },
+  { id: "messages", label: "Messages", icon: <Mail fontSize="small" /> },
 ] satisfies Array<{ id: ActiveView; label: string; icon: React.ReactNode }>;
 
 const viewCopy: Record<ActiveView, { title: string; subtitle: string }> = {
@@ -92,6 +107,10 @@ const viewCopy: Record<ActiveView, { title: string; subtitle: string }> = {
   events: {
     title: "Upcoming Events",
     subtitle: "Create and review upcoming event records from the events API.",
+  },
+  messages: {
+    title: "Contact Messages",
+    subtitle: "Review messages submitted from the website contact form.",
   },
 };
 
@@ -297,6 +316,7 @@ const AdminScreen: React.FC = () => {
   const eventFormRef = useRef<HTMLFormElement>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [events, setEvents] = useState<UpcomingEvent[]>([]);
+  const [messages, setMessages] = useState<ContactMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingPost, setIsSavingPost] = useState(false);
   const [isSavingEvent, setIsSavingEvent] = useState(false);
@@ -314,13 +334,15 @@ const AdminScreen: React.FC = () => {
   const loadAdminData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [postPayload, eventPayload] = await Promise.all([
+      const [postPayload, eventPayload, messagePayload] = await Promise.all([
         requestJson<unknown>([POST_ENDPOINT], undefined, "Unable to load posts."),
         requestJson<unknown>(EVENT_ENDPOINTS, undefined, "Unable to load upcoming events."),
+        requestJson<unknown>(CONTACT_ENDPOINTS, undefined, "Unable to load contact messages."),
       ]);
 
       setPosts(normalizeCollection<Post>(postPayload));
       setEvents(normalizeCollection<UpcomingEvent>(eventPayload));
+      setMessages(normalizeCollection<ContactMessage>(messagePayload));
     } catch (error) {
       setFeedback({
         severity: "error",
@@ -654,6 +676,7 @@ const AdminScreen: React.FC = () => {
                 { label: "Magazines", value: magazines, icon: <LibraryBooks /> },
                 { label: "Books", value: books, icon: <AutoStories /> },
                 { label: "Active events", value: activeEvents, icon: <ToggleOn /> },
+                { label: "Contact messages", value: messages.length, icon: <Mail /> },
               ].map((item) => (
                 <Paper key={item.label} elevation={0} sx={{ p: 2.25, border: "1px solid #e6e8ec", borderRadius: 2 }}>
                   <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 2 }}>
@@ -672,7 +695,7 @@ const AdminScreen: React.FC = () => {
             </Box>
           )}
 
-          {activeView !== "dashboard" && (
+          {(activeView === "posts" || activeView === "events") && (
           <Box
             sx={{
               display: "grid",
@@ -948,6 +971,75 @@ const AdminScreen: React.FC = () => {
 
                 {!events.length && !isLoading && (
                   <Typography sx={{ color: "#667085" }}>No upcoming events returned from the API yet.</Typography>
+                )}
+              </Stack>
+            </Paper>
+            )}
+
+            {activeView === "messages" && (
+            <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid #e6e8ec", borderRadius: 2 }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: { xs: "flex-start", md: "center" },
+                  justifyContent: "space-between",
+                  gap: 2,
+                  flexDirection: { xs: "column", md: "row" },
+                  mb: 2,
+                }}
+              >
+                <Typography variant="h6" sx={{ fontWeight: 900 }}>
+                  Contact Messages
+                </Typography>
+                <Chip
+                  size="small"
+                  label={`${messages.length} total`}
+                  sx={{ bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 900 }}
+                />
+              </Box>
+
+              <Stack spacing={1.5}>
+                {messages.map((messageItem) => (
+                  <Box
+                    key={messageItem._id || `${messageItem.email}-${messageItem.createdAt}`}
+                    sx={{
+                      border: "1px solid #edf0f2",
+                      borderRadius: 1.5,
+                      p: { xs: 1.5, md: 2 },
+                      bgcolor: "#fff",
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: { xs: "flex-start", md: "center" },
+                        justifyContent: "space-between",
+                        gap: 1.5,
+                        flexDirection: { xs: "column", md: "row" },
+                        mb: 1,
+                      }}
+                    >
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography sx={{ fontWeight: 900, color: "#171a20", overflowWrap: "anywhere" }}>
+                          {messageItem.fullName}
+                        </Typography>
+                        <Typography sx={{ color: "#667085", fontSize: 13, overflowWrap: "anywhere" }}>
+                          {messageItem.email}
+                        </Typography>
+                      </Box>
+                      <Typography sx={{ color: "#98a2b3", fontSize: 13, flexShrink: 0 }}>
+                        {formatDate(messageItem.createdAt)}
+                      </Typography>
+                    </Box>
+
+                    <Typography sx={{ color: "#475467", lineHeight: 1.7, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+                      {messageItem.message}
+                    </Typography>
+                  </Box>
+                ))}
+
+                {!messages.length && !isLoading && (
+                  <Typography sx={{ color: "#667085" }}>No contact messages returned from the API yet.</Typography>
                 )}
               </Stack>
             </Paper>

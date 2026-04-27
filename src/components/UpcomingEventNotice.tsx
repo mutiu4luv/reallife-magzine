@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Box,
   Button,
@@ -61,11 +61,12 @@ const loadUpcomingEvents = async () => {
 
 const UpcomingEventNotice = () => {
   const location = useLocation();
+  const initialPath = useRef(location.pathname);
   const [event, setEvent] = useState<UpcomingEvent | null>(null);
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
-    if (location.pathname.startsWith("/admin")) {
+    if (initialPath.current.startsWith("/admin")) {
       return;
     }
 
@@ -86,7 +87,7 @@ const UpcomingEventNotice = () => {
     return () => {
       isMounted = false;
     };
-  }, [location.pathname]);
+  }, []);
 
   if (!event) {
     return null;
