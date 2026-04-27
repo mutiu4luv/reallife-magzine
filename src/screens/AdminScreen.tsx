@@ -449,21 +449,45 @@ const AdminScreen: React.FC = () => {
       return;
     }
 
-    formData.set("title", title);
-    formData.set("desc", desc);
-    formData.set("type", type);
-    formData.set("image", imageFiles[0]);
+    const buildBlogFormData = (useMultipleImages: boolean) => {
+      const blogFormData = new FormData();
+      blogFormData.set("title", title);
+      blogFormData.set("desc", desc);
+      blogFormData.set("type", type);
+      blogFormData.set("image", imageFiles[0]);
+
+      if (useMultipleImages) {
+        imageFiles.slice(1).forEach((image) => {
+          blogFormData.append("images", image);
+        });
+      }
+
+      return blogFormData;
+    };
 
     setIsSavingPost(true);
     try {
-      const createdPost = await requestJson<Post>(
-        [POST_ENDPOINT],
-        {
-          method: "POST",
-          body: formData,
-        },
-        "Unable to publish blog."
-      );
+      let createdPost: Post;
+
+      try {
+        createdPost = await requestJson<Post>(
+          [POST_ENDPOINT],
+          {
+            method: "POST",
+            body: buildBlogFormData(true),
+          },
+          "Unable to publish blog."
+        );
+      } catch (error) {
+        createdPost = await requestJson<Post>(
+          [POST_ENDPOINT],
+          {
+            method: "POST",
+            body: buildBlogFormData(false),
+          },
+          error instanceof Error ? error.message : "Unable to publish blog."
+        );
+      }
 
       setPosts((currentPosts) => [createdPost, ...currentPosts]);
       postFormRef.current?.reset();
