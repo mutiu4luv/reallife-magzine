@@ -181,8 +181,8 @@ const Pastedition: React.FC = () => {
             textAlign: "left",
           }}
         >
-          Take a look back at our past Reality Life Magazine editions of Reality Life Magazines, capturing Moments, inspiring stories,
-          memorable features and the voices that shape our journey. At Reality Life Magzine, We document histories/events for a lasting memories. Your legacy live on...
+          Take a look  at  past editions of Reality Life Magazine, capturing Moments, inspiring stories,
+          memorable features and the voices that shape our society. At Reality Life Magazine, we celebrate culture, We document histories/events, for a lasting memories. Your legacy live on...
         </Typography>
       </Box>
 
