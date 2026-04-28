@@ -178,6 +178,7 @@ const Pastedition: React.FC = () => {
             mt: 2,
             fontSize: { xs: 14.5, sm: 16 },
             lineHeight: 1.8,
+            textAlign: "left",
           }}
         >
           Take a look back at our past Reality Life Magazine editions, capturing inspiring stories,
