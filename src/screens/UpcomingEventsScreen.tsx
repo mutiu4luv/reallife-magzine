@@ -8,6 +8,7 @@ import {
   InputAdornment,
   Pagination,
   Paper,
+  Stack,
   TextField,
   Typography,
   useMediaQuery,
@@ -119,7 +120,8 @@ const UpcomingEventsScreen: React.FC = () => {
                 mx: "auto",
               }}
             >
-              Browse RealityLife event announcements, images, and details returned from the backend.
+              Stay connected with Reality Life Magazine through our latest events, special gatherings, community
+              stories, and important moments worth sharing.
             </Typography>
           </motion.div>
 
@@ -244,7 +246,10 @@ const UpcomingEventsScreen: React.FC = () => {
           >
             {paginatedEvents.map((eventItem, index) => {
               const eventId = eventItem._id || eventItem.id;
-              const image = eventItem.images[0] || "";
+              const images = Array.isArray(eventItem.images) ? eventItem.images.filter(Boolean) : [];
+              const primaryImage = images[0] || "";
+              const secondaryImages = images.slice(1, 4);
+              const remainingImages = Math.max(images.length - 4, 0);
 
               return (
                 <motion.div
@@ -275,18 +280,90 @@ const UpcomingEventsScreen: React.FC = () => {
                       },
                     }}
                   >
-                    {image ? (
-                      <Box
-                        component="img"
-                        src={image}
-                        alt={eventItem.title}
-                        sx={{ width: "100%", height: 180, objectFit: "cover" }}
-                      />
+                    {primaryImage ? (
+                      <Box sx={{ position: "relative", bgcolor: "#111" }}>
+                        <Box
+                          component="img"
+                          src={primaryImage}
+                          alt={eventItem.title}
+                          sx={{ width: "100%", height: 190, objectFit: "cover", display: "block" }}
+                        />
+
+                        {secondaryImages.length > 0 && (
+                          <Stack
+                            direction="row"
+                            spacing={0.75}
+                            sx={{
+                              position: "absolute",
+                              left: 12,
+                              right: 12,
+                              bottom: 12,
+                              p: 0.75,
+                              borderRadius: 2,
+                              bgcolor: "rgba(10,10,10,0.72)",
+                              backdropFilter: "blur(8px)",
+                            }}
+                          >
+                            {secondaryImages.map((eventImage, imageIndex) => (
+                              <Box
+                                key={`${eventImage}-${imageIndex}`}
+                                sx={{
+                                  position: "relative",
+                                  width: 54,
+                                  height: 44,
+                                  borderRadius: 1,
+                                  overflow: "hidden",
+                                  border: "1px solid rgba(255,255,255,0.55)",
+                                  flexShrink: 0,
+                                }}
+                              >
+                                <Box
+                                  component="img"
+                                  src={eventImage}
+                                  alt={`${eventItem.title} image ${imageIndex + 2}`}
+                                  sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                                />
+                                {imageIndex === secondaryImages.length - 1 && remainingImages > 0 && (
+                                  <Box
+                                    sx={{
+                                      position: "absolute",
+                                      inset: 0,
+                                      display: "grid",
+                                      placeItems: "center",
+                                      bgcolor: "rgba(0,0,0,0.62)",
+                                      color: "#fff",
+                                      fontSize: 13,
+                                      fontWeight: 900,
+                                    }}
+                                  >
+                                    +{remainingImages}
+                                  </Box>
+                                )}
+                              </Box>
+                            ))}
+                          </Stack>
+                        )}
+
+                        {images.length > 1 && (
+                          <Chip
+                            size="small"
+                            label={`${images.length} images`}
+                            sx={{
+                              position: "absolute",
+                              top: 12,
+                              right: 12,
+                              bgcolor: "rgba(255,255,255,0.92)",
+                              color: "#111",
+                              fontWeight: 900,
+                            }}
+                          />
+                        )}
+                      </Box>
                     ) : (
                       <Box
                         sx={{
                           width: "100%",
-                          height: 180,
+                          height: 190,
                           bgcolor: "#111",
                           color: "#f1d68a",
                           display: "grid",

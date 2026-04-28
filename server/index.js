@@ -58,7 +58,10 @@ const ensureDatabase = async () => {
   try {
     await fs.access(DB_PATH);
   } catch {
-    await fs.writeFile(DB_PATH, JSON.stringify({ posts: [], news: [], upcomingEvents: [] }, null, 2));
+    await fs.writeFile(
+      DB_PATH,
+      JSON.stringify({ posts: [], news: [], upcomingEvents: [], contactMessages: [] }, null, 2)
+    );
   }
 };
 
@@ -71,6 +74,7 @@ const readDatabase = async () => {
     posts: Array.isArray(data.posts) ? data.posts : [],
     news: Array.isArray(data.news) ? data.news : [],
     upcomingEvents: Array.isArray(data.upcomingEvents) ? data.upcomingEvents : [],
+    contactMessages: Array.isArray(data.contactMessages) ? data.contactMessages : [],
   };
 };
 
@@ -339,7 +343,54 @@ app.delete(["/api/upcoming-events/:id", "/api/events/:id"], async (req, res, nex
   }
 });
 
+app.get(["/api/contact", "/api/contact-messages", "/api/contactMessages"], async (_req, res, next) => {
+  try {
+    const db = await readDatabase();
+    res.json(db.contactMessages);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post(["/api/contact", "/api/contact-messages", "/api/contactMessages"], async (req, res, next) => {
+  try {
+    const fullName = String(req.body.fullName || req.body.name || "").trim();
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const message = String(req.body.message || "").trim();
+
+    if (!fullName || !email || !message) {
+      res.status(400).json({ message: "Full name, email, and message are required." });
+      return;
+    }
+
+    const db = await readDatabase();
+    const contactMessage = createRecord({
+      fullName,
+      email,
+      message,
+    });
+
+    db.contactMessages.unshift(contactMessage);
+    await writeDatabase(db);
+    res.status(201).json(contactMessage);
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.use((error, _req, res, _next) => {
+  if (error instanceof multer.MulterError) {
+    if (error.code === "LIMIT_FILE_SIZE") {
+      res.status(413).json({ message: "Image upload failed. Each image must be 8MB or smaller." });
+      return;
+    }
+
+    if (error.code === "LIMIT_FILE_COUNT") {
+      res.status(400).json({ message: "Image upload failed. You can upload up to 8 images at a time." });
+      return;
+    }
+  }
+
   res.status(500).json({ message: error.message || "Server error." });
 });
 

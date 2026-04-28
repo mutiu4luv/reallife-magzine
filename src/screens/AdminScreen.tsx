@@ -32,6 +32,7 @@ import {
   Image,
   LibraryBooks,
   Mail,
+  PhotoLibrary,
   Save,
   ToggleOn,
 } from "@mui/icons-material";
@@ -46,6 +47,11 @@ const CONTACT_ENDPOINTS = [
   `${API_BASE_URL}/api/contactMessages`,
 ];
 const DATABASE_READY_RETRY_DELAYS = [700, 1400, 2400];
+const MAX_EVENT_IMAGES = 8;
+const MAX_IMAGE_SIZE_BYTES = 1.2 * 1024 * 1024;
+const MAX_EVENT_TOTAL_UPLOAD_BYTES = 4 * 1024 * 1024;
+const MAX_IMAGE_SIZE_LABEL = "1.2MB";
+const MAX_EVENT_TOTAL_UPLOAD_LABEL = "4MB";
 
 type PostType = "Magazine" | "Book";
 
@@ -133,14 +139,24 @@ const viewCopy: Record<ActiveView, { title: string; subtitle: string }> = {
 };
 
 const getErrorMessage = async (response: Response, fallback: string) => {
+  if (response.status === 413) {
+    return "The selected images are too large for Vercel. Please choose smaller images or upload fewer images.";
+  }
+
   try {
-    const data = await response.json();
-    return data?.error || data?.message || fallback;
+    const contentType = response.headers.get("content-type") || "";
+
+    if (contentType.includes("application/json")) {
+      const data = await response.json();
+      return data?.error || data?.message || fallback;
+    }
+
+    const text = await response.text();
+    return text || fallback;
   } catch {
     return fallback;
   }
 };
-
 const wait = (delay: number) =>
   new Promise((resolve) => {
     window.setTimeout(resolve, delay);
@@ -153,6 +169,23 @@ const toAdminErrorMessage = (message: string) =>
   isDatabaseReadinessError(message)
     ? "The database is still starting. Please wait a moment and refresh again."
     : message;
+
+const isUsableImageFile = (value: FormDataEntryValue | null): value is File =>
+  value instanceof File && value.size > 0 && value.type.startsWith("image/");
+
+const getLargeImageNames = (files: File[]) =>
+  files.filter((file) => file.size > MAX_IMAGE_SIZE_BYTES).map((file) => file.name);
+
+const getTotalFileSize = (files: File[]) =>
+  files.reduce((total, file) => total + file.size, 0);
+
+const buildTotalUploadTooLargeMessage = () =>
+  `The selected images are too large for Vercel upload. Please choose smaller images with a total size below ${MAX_EVENT_TOTAL_UPLOAD_LABEL}.`;
+
+const buildLargeImageMessage = (names: string[]) =>
+  names.length === 1
+    ? `${names[0]} is larger than ${MAX_IMAGE_SIZE_LABEL}. Please choose a smaller image.`
+    : `${names.length} selected images are larger than ${MAX_IMAGE_SIZE_LABEL}. Please choose smaller images.`;
 
 const normalizeCollection = <T,>(payload: unknown): T[] => {
   if (Array.isArray(payload)) {
@@ -360,7 +393,10 @@ const AdminScreen: React.FC = () => {
   const [selectedBlogImageNames, setSelectedBlogImageNames] = useState("");
   const [selectedNewsImageName, setSelectedNewsImageName] = useState("");
   const [selectedNewsImagePreview, setSelectedNewsImagePreview] = useState("");
+  const [selectedEventImages, setSelectedEventImages] = useState<File[]>([]);
   const [selectedEventImageNames, setSelectedEventImageNames] = useState("");
+  const [selectedEventImageCount, setSelectedEventImageCount] = useState(0);
+  const [selectedEventImagePreviews, setSelectedEventImagePreviews] = useState<string[]>([]);
   const [pendingDelete, setPendingDelete] = useState<PendingDelete>(null);
   const [activeView, setActiveView] = useState<ActiveView>("dashboard");
 
@@ -418,6 +454,12 @@ const AdminScreen: React.FC = () => {
     };
   }, [selectedNewsImagePreview]);
 
+  useEffect(() => {
+    return () => {
+      selectedEventImagePreviews.forEach((preview) => URL.revokeObjectURL(preview));
+    };
+  }, [selectedEventImagePreviews]);
+
   const handleNewsImageChange = (changeEvent: React.ChangeEvent<HTMLInputElement>) => {
     const file = changeEvent.target.files?.[0];
 
@@ -431,21 +473,120 @@ const AdminScreen: React.FC = () => {
       return;
     }
 
+    if (!file.type.startsWith("image/")) {
+      changeEvent.target.value = "";
+      setSelectedNewsImageName("");
+      setSelectedNewsImagePreview("");
+      setFeedback({ severity: "error", message: "Please choose an image file." });
+      return;
+    }
+
+    if (file.size > MAX_IMAGE_SIZE_BYTES) {
+      changeEvent.target.value = "";
+      setSelectedNewsImageName("");
+      setSelectedNewsImagePreview("");
+      setFeedback({ severity: "error", message: buildLargeImageMessage([file.name]) });
+      return;
+    }
+
     setSelectedNewsImageName(file.name);
     setSelectedNewsImagePreview(URL.createObjectURL(file));
+  };
+
+  const updateEventImageState = (images: File[]) => {
+    selectedEventImagePreviews.forEach((preview) => URL.revokeObjectURL(preview));
+  
+    setSelectedEventImages(images);
+    setSelectedEventImageNames(images.map((file) => file.name).join(", "));
+    setSelectedEventImageCount(images.length);
+    setSelectedEventImagePreviews(images.map((file) => URL.createObjectURL(file)));
+  };
+  
+  const handleEventImagesChange = (changeEvent: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(changeEvent.target.files || []);
+  
+    if (selectedFiles.length === 0) {
+      return;
+    }
+  
+    const imageFiles = selectedFiles.filter((file) => file.type.startsWith("image/"));
+  
+    if (imageFiles.length === 0) {
+      changeEvent.target.value = "";
+      setFeedback({ severity: "error", message: "Please choose image files only." });
+      return;
+    }
+  
+    const largeImageNames = getLargeImageNames(imageFiles);
+  
+    if (largeImageNames.length > 0) {
+      changeEvent.target.value = "";
+      setFeedback({ severity: "error", message: buildLargeImageMessage(largeImageNames) });
+      return;
+    }
+  
+    const combinedImages = [...selectedEventImages, ...imageFiles];
+  
+    const uniqueImages = combinedImages.filter(
+      (file, index, self) =>
+        index ===
+        self.findIndex(
+          (currentFile) =>
+            currentFile.name === file.name &&
+            currentFile.size === file.size &&
+            currentFile.lastModified === file.lastModified
+        )
+    );
+  
+    const limitedImages = uniqueImages.slice(0, MAX_EVENT_IMAGES);
+
+    const totalUploadSize = getTotalFileSize(limitedImages);
+    
+    if (totalUploadSize > MAX_EVENT_TOTAL_UPLOAD_BYTES) {
+      changeEvent.target.value = "";
+      setFeedback({
+        severity: "error",
+        message: buildTotalUploadTooLargeMessage(),
+      });
+      return;
+    }
+    
+    if (uniqueImages.length > MAX_EVENT_IMAGES) {
+      setFeedback({
+        severity: "error",
+        message: `Only ${MAX_EVENT_IMAGES} event images can be uploaded.`,
+      });
+    } else {
+      setFeedback(null);
+    }
+    
+    updateEventImageState(limitedImages);
+    
+    changeEvent.target.value = "";
+  };
+
+  const handleRemoveEventImage = (imageIndex: number) => {
+    const remainingImages = selectedEventImages.filter((_, index) => index !== imageIndex);
+    updateEventImageState(remainingImages);
   };
 
   const handlePostSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
 
-    const imageFiles = formData.getAll("images").filter((image) => image instanceof File && image.size > 0);
+    const imageFiles = formData.getAll("images").filter(isUsableImageFile);
     const title = String(formData.get("title") || "").trim();
     const desc = String(formData.get("desc") || "").trim();
     const type = String(formData.get("type") || "Magazine") as PostType;
 
     if (!title || !desc || imageFiles.length === 0) {
       setFeedback({ severity: "error", message: "Blog title, description, and at least one image are required." });
+      return;
+    }
+
+    const largeImageNames = getLargeImageNames(imageFiles);
+    if (largeImageNames.length > 0) {
+      setFeedback({ severity: "error", message: buildLargeImageMessage(largeImageNames) });
       return;
     }
 
@@ -492,8 +633,13 @@ const AdminScreen: React.FC = () => {
     const title = String(formData.get("title") || "").trim();
     const description = String(formData.get("description") || "").trim();
 
-    if (!title || !description || !(image instanceof File) || image.size === 0) {
+    if (!title || !description || !isUsableImageFile(image)) {
       setFeedback({ severity: "error", message: "News title, description, and image are required." });
+      return;
+    }
+
+    if (image.size > MAX_IMAGE_SIZE_BYTES) {
+      setFeedback({ severity: "error", message: buildLargeImageMessage([image.name]) });
       return;
     }
 
@@ -532,10 +678,23 @@ const AdminScreen: React.FC = () => {
 
     const title = String(formData.get("title") || "").trim();
     const description = String(formData.get("description") || "").trim();
-    const imageFiles = formData.getAll("images").filter((image) => image instanceof File && image.size > 0);
-
+    const imageFiles = selectedEventImages;
     if (!title || !description || imageFiles.length === 0) {
       setFeedback({ severity: "error", message: "Event title, description, and at least one image are required." });
+      return;
+    }
+
+    const uploadableEventImages = imageFiles.slice(0, MAX_EVENT_IMAGES);
+    const largeImageNames = getLargeImageNames(uploadableEventImages);
+    if (largeImageNames.length > 0) {
+      setFeedback({ severity: "error", message: buildLargeImageMessage(largeImageNames) });
+      return;
+    }
+    if (getTotalFileSize(uploadableEventImages) > MAX_EVENT_TOTAL_UPLOAD_BYTES) {
+      setFeedback({
+        severity: "error",
+        message: buildTotalUploadTooLargeMessage(),
+      });
       return;
     }
 
@@ -543,20 +702,32 @@ const AdminScreen: React.FC = () => {
     formData.set("description", description);
     formData.set("isActive", formData.get("isActive") === "on" ? "true" : "false");
 
+    const eventFormData = new FormData();
+    eventFormData.set("title", title);
+    eventFormData.set("description", description);
+    eventFormData.set("isActive", formData.get("isActive") === "true" ? "true" : "false");
+    uploadableEventImages.forEach((image) => {
+      eventFormData.append("images", image);
+    });
+
     setIsSavingEvent(true);
     try {
       const createdEvent = await requestJson<UpcomingEvent>(
-        EVENT_ENDPOINTS,
+        [`${API_BASE_URL}/api/upcoming-events`, `${API_BASE_URL}/api/events`],
         {
           method: "POST",
-          body: formData,
+          body: eventFormData,
         },
         "Unable to create upcoming event."
       );
 
       setEvents((currentEvents) => [createdEvent, ...currentEvents]);
       eventFormRef.current?.reset();
+      selectedEventImagePreviews.forEach((preview) => URL.revokeObjectURL(preview));
+      setSelectedEventImages([]);
       setSelectedEventImageNames("");
+      setSelectedEventImageCount(0);
+      setSelectedEventImagePreviews([]);
       setFeedback({ severity: "success", message: "Upcoming event created successfully." });
     } catch (error) {
       setFeedback({
@@ -1059,7 +1230,7 @@ const AdminScreen: React.FC = () => {
                           Upload news image
                         </Typography>
                         <Typography sx={{ color: "#667085", fontSize: 13, mt: 0.5 }}>
-                          Click here and choose an image from your device.
+                          Click here and choose an image from your device. Max {MAX_IMAGE_SIZE_LABEL}.
                         </Typography>
                       </Box>
                     </Stack>
@@ -1111,38 +1282,162 @@ const AdminScreen: React.FC = () => {
 
                 <TextField required multiline minRows={5} label="Description" name="description" fullWidth />
 
-                <Box>
-                  <Button
-                    component="label"
-                    variant="outlined"
-                    startIcon={<CloudUpload />}
-                    sx={{
-                      borderColor: "#caa64a",
-                      color: "#6f5517",
-                      textTransform: "none",
-                      fontWeight: 900,
-                      "&:hover": { borderColor: "#caa64a", bgcolor: "#f7edd0" },
-                    }}
-                  >
-                    Select event images
-                    <input
-                      hidden
-                      required
-                      multiple
-                      type="file"
-                      name="images"
-                      accept="image/*"
-                      onChange={(changeEvent) => {
-                        const names = Array.from(changeEvent.target.files || [])
-                          .map((file) => file.name)
-                          .join(", ");
-                        setSelectedEventImageNames(names);
-                      }}
-                    />
-                  </Button>
-                  <Typography sx={{ color: "#667085", fontSize: 13, mt: 1 }}>
-                    {selectedEventImageNames || "No images selected"}
-                  </Typography>
+                <Box
+                  component="label"
+                  sx={{
+                    cursor: "pointer",
+                    border: "1.5px dashed #caa64a",
+                    borderRadius: 2,
+                    bgcolor: "#fffaf0",
+                    minHeight: { xs: 260, sm: 300 },
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "center",
+                    gap: 1.5,
+                    p: { xs: 1.5, sm: 2 },
+                    transition: "border-color 160ms ease, background-color 160ms ease",
+                    "&:hover": {
+                      borderColor: "#9a7725",
+                      bgcolor: "#fff4d9",
+                    },
+                  }}
+                >
+                  <input
+  hidden
+  required={selectedEventImages.length === 0}
+  multiple
+  type="file"
+  name="images"
+  accept="image/*"
+  onChange={handleEventImagesChange}
+/>
+
+                  {selectedEventImagePreviews.length > 0 ? (
+                    <>
+                      <Box
+                        sx={{
+                          display: "grid",
+                          gridTemplateColumns: {
+                            xs: "repeat(2, minmax(0, 1fr))",
+                            sm: "repeat(3, minmax(0, 1fr))",
+                          },
+                          gap: 1,
+                        }}
+                      >
+                        {selectedEventImagePreviews.map((preview, index) => (
+  <Box
+    key={preview}
+    sx={{
+      position: "relative",
+      aspectRatio: index === 0 ? { xs: "1 / 1", sm: "2 / 1" } : "1 / 1",
+      gridColumn: index === 0 ? { xs: "span 2", sm: "span 2" } : "span 1",
+      borderRadius: 1.5,
+      overflow: "hidden",
+      bgcolor: "#111318",
+    }}
+  >
+    <Box
+      component="img"
+      src={preview}
+      alt={`Selected event image ${index + 1}`}
+      sx={{
+        width: "100%",
+        height: "100%",
+        objectFit: "cover",
+        display: "block",
+      }}
+    />
+
+    <IconButton
+      size="small"
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        handleRemoveEventImage(index);
+      }}
+      sx={{
+        position: "absolute",
+        top: 6,
+        right: 6,
+        bgcolor: "rgba(0,0,0,0.7)",
+        color: "#fff",
+        "&:hover": {
+          bgcolor: "#b42318",
+        },
+      }}
+    >
+      <Delete fontSize="small" />
+    </IconButton>
+  </Box>
+))}
+                      </Box>
+
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: { xs: "flex-start", sm: "center" },
+                          justifyContent: "space-between",
+                          gap: 1.5,
+                          flexDirection: { xs: "column", sm: "row" },
+                        }}
+                      >
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography sx={{ fontWeight: 900, color: "#171a20" }}>
+                            {selectedEventImageCount} image{selectedEventImageCount === 1 ? "" : "s"} ready
+                          </Typography>
+                          <Typography sx={{ color: "#667085", fontSize: 13 }} noWrap>
+                            {selectedEventImageNames}
+                          </Typography>
+                        </Box>
+                        <Button
+                          component="span"
+                          size="small"
+                          startIcon={<CloudUpload />}
+                          sx={{ color: "#6f5517", textTransform: "none", fontWeight: 900, flexShrink: 0 }}
+                        >
+                          Change images
+                        </Button>
+                      </Box>
+                    </>
+                  ) : (
+                    <Stack spacing={1.25} sx={{ alignItems: "center", textAlign: "center", px: 2 }}>
+                      <Box
+                        sx={{
+                          width: 58,
+                          height: 58,
+                          borderRadius: 1.5,
+                          bgcolor: "#caa64a",
+                          color: "#111318",
+                          display: "grid",
+                          placeItems: "center",
+                        }}
+                      >
+                        <PhotoLibrary />
+                      </Box>
+                      <Box>
+                        <Typography sx={{ fontWeight: 900, color: "#171a20" }}>
+                          Upload event images
+                        </Typography>
+                        <Typography sx={{ color: "#667085", fontSize: 13, mt: 0.5 }}>
+                          Choose up to {MAX_EVENT_IMAGES} images. Each image must be {MAX_IMAGE_SIZE_LABEL} or smaller.
+                        </Typography>
+                      </Box>
+                      <Button
+                        component="span"
+                        variant="outlined"
+                        startIcon={<CloudUpload />}
+                        sx={{
+                          borderColor: "#caa64a",
+                          color: "#6f5517",
+                          textTransform: "none",
+                          fontWeight: 900,
+                          "&:hover": { borderColor: "#caa64a", bgcolor: "#f7edd0" },
+                        }}
+                      >
+                        Select images
+                      </Button>
+                    </Stack>
+                  )}
                 </Box>
 
                 <FormControlLabel
