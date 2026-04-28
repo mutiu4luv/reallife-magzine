@@ -14,7 +14,9 @@ import {
   Divider,
   FormControlLabel,
   IconButton,
+  InputAdornment,
   MenuItem,
+  Pagination,
   Paper,
   Snackbar,
   Stack,
@@ -34,10 +36,11 @@ import {
   Mail,
   PhotoLibrary,
   Save,
+  Search,
   ToggleOn,
 } from "@mui/icons-material";
 import { API_BASE_URL } from "../config/api";
-import { NEWS_ENDPOINT } from "../services/contentApi";
+import { NEWS_ENDPOINT, PAST_EDITIONS_ENDPOINT } from "../services/contentApi";
 
 const POST_ENDPOINT = `${API_BASE_URL}/api/posts`;
 const EVENT_ENDPOINTS = [`${API_BASE_URL}/api/upcoming-events`, `${API_BASE_URL}/api/events`];
@@ -52,6 +55,7 @@ const MAX_IMAGE_SIZE_BYTES = 1.2 * 1024 * 1024;
 const MAX_EVENT_TOTAL_UPLOAD_BYTES = 4 * 1024 * 1024;
 const MAX_IMAGE_SIZE_LABEL = "1.2MB";
 const MAX_EVENT_TOTAL_UPLOAD_LABEL = "4MB";
+const ADMIN_PAGE_SIZE = 6;
 
 type PostType = "Magazine" | "Book";
 
@@ -90,6 +94,13 @@ type ContactMessage = {
   createdAt?: string;
 };
 
+type PastEdition = {
+  _id?: string;
+  title?: string;
+  image: string;
+  createdAt?: string;
+};
+
 type Feedback = {
   severity: "success" | "error";
   message: string;
@@ -99,9 +110,10 @@ type PendingDelete =
   | { kind: "post"; item: Post }
   | { kind: "news"; item: NewsItem }
   | { kind: "event"; item: UpcomingEvent }
+  | { kind: "pastEdition"; item: PastEdition }
   | null;
 
-type ActiveView = "dashboard" | "posts" | "news" | "events" | "messages";
+type ActiveView = "dashboard" | "posts" | "news" | "events" | "pastEditions" | "messages";
 
 type RequestJsonOptions = {
   retryDatabaseReady?: boolean;
@@ -112,6 +124,7 @@ const navItems = [
   { id: "posts", label: "Blog", icon: <LibraryBooks fontSize="small" /> },
   { id: "news", label: "News", icon: <Article fontSize="small" /> },
   { id: "events", label: "Events", icon: <EventAvailable fontSize="small" /> },
+  { id: "pastEditions", label: "Past Editions", icon: <PhotoLibrary fontSize="small" /> },
   { id: "messages", label: "Messages", icon: <Mail fontSize="small" /> },
 ] satisfies Array<{ id: ActiveView; label: string; icon: React.ReactNode }>;
 
@@ -131,6 +144,10 @@ const viewCopy: Record<ActiveView, { title: string; subtitle: string }> = {
   events: {
     title: "Upcoming Events",
     subtitle: "Upload upcoming events with multiple images, title, and description.",
+  },
+  pastEditions: {
+    title: "Past Editions",
+    subtitle: "Upload images that appear in the homepage past edition section.",
   },
   messages: {
     title: "Contact Messages",
@@ -276,6 +293,24 @@ const formatDate = (value?: string) => {
   }).format(new Date(value));
 };
 
+const getSearchText = (values: Array<string | undefined>) =>
+  values.join(" ").toLowerCase();
+
+const filterByQuery = <T,>(items: T[], query: string, getValues: (item: T) => Array<string | undefined>) => {
+  const normalizedQuery = query.trim().toLowerCase();
+
+  if (!normalizedQuery) {
+    return items;
+  }
+
+  return items.filter((item) => getSearchText(getValues(item)).includes(normalizedQuery));
+};
+
+const getPageCount = (total: number) => Math.max(Math.ceil(total / ADMIN_PAGE_SIZE), 1);
+
+const paginateItems = <T,>(items: T[], page: number) =>
+  items.slice((page - 1) * ADMIN_PAGE_SIZE, page * ADMIN_PAGE_SIZE);
+
 const AdminLoader = () => (
   <Paper
     elevation={0}
@@ -380,17 +415,21 @@ const AdminScreen: React.FC = () => {
   const postFormRef = useRef<HTMLFormElement>(null);
   const newsFormRef = useRef<HTMLFormElement>(null);
   const eventFormRef = useRef<HTMLFormElement>(null);
+  const pastEditionFormRef = useRef<HTMLFormElement>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [news, setNews] = useState<NewsItem[]>([]);
   const [events, setEvents] = useState<UpcomingEvent[]>([]);
+  const [pastEditions, setPastEditions] = useState<PastEdition[]>([]);
   const [messages, setMessages] = useState<ContactMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingPost, setIsSavingPost] = useState(false);
   const [isSavingNews, setIsSavingNews] = useState(false);
   const [isSavingEvent, setIsSavingEvent] = useState(false);
+  const [isSavingPastEdition, setIsSavingPastEdition] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [selectedBlogImageNames, setSelectedBlogImageNames] = useState("");
+  const [selectedPastEditionImageNames, setSelectedPastEditionImageNames] = useState("");
   const [selectedNewsImageName, setSelectedNewsImageName] = useState("");
   const [selectedNewsImagePreview, setSelectedNewsImagePreview] = useState("");
   const [selectedEventImages, setSelectedEventImages] = useState<File[]>([]);
@@ -399,31 +438,58 @@ const AdminScreen: React.FC = () => {
   const [selectedEventImagePreviews, setSelectedEventImagePreviews] = useState<string[]>([]);
   const [pendingDelete, setPendingDelete] = useState<PendingDelete>(null);
   const [activeView, setActiveView] = useState<ActiveView>("dashboard");
+  const [postSearch, setPostSearch] = useState("");
+  const [newsSearch, setNewsSearch] = useState("");
+  const [eventSearch, setEventSearch] = useState("");
+  const [postPage, setPostPage] = useState(1);
+  const [newsPage, setNewsPage] = useState(1);
+  const [eventPage, setEventPage] = useState(1);
 
   const activeEvents = useMemo(() => events.filter((event) => event.isActive).length, [events]);
   const magazines = useMemo(() => posts.filter((post) => post.type === "Magazine").length, [posts]);
   const books = useMemo(() => posts.filter((post) => post.type === "Book").length, [posts]);
+  const filteredPosts = useMemo(
+    () => filterByQuery(posts, postSearch, (post) => [post.title, post.desc, post.type, post.createdAt]),
+    [postSearch, posts]
+  );
+  const filteredNews = useMemo(
+    () => filterByQuery(news, newsSearch, (newsItem) => [newsItem.title, newsItem.description, newsItem.createdAt]),
+    [news, newsSearch]
+  );
+  const filteredEvents = useMemo(
+    () => filterByQuery(events, eventSearch, (event) => [event.title, event.description, event.createdAt]),
+    [eventSearch, events]
+  );
+  const postPageCount = useMemo(() => getPageCount(filteredPosts.length), [filteredPosts.length]);
+  const newsPageCount = useMemo(() => getPageCount(filteredNews.length), [filteredNews.length]);
+  const eventPageCount = useMemo(() => getPageCount(filteredEvents.length), [filteredEvents.length]);
+  const visiblePosts = useMemo(() => paginateItems(filteredPosts, postPage), [filteredPosts, postPage]);
+  const visibleNews = useMemo(() => paginateItems(filteredNews, newsPage), [filteredNews, newsPage]);
+  const visibleEvents = useMemo(() => paginateItems(filteredEvents, eventPage), [eventPage, filteredEvents]);
   const currentView = viewCopy[activeView];
 
   const loadAdminData = useCallback(async () => {
     setIsLoading(true);
-    const [postResult, eventResult, messageResult, newsResult] = await Promise.all([
+    const [postResult, eventResult, messageResult, newsResult, pastEditionResult] = await Promise.all([
       requestCollection<Post>([POST_ENDPOINT], "Unable to load blogs."),
       requestCollection<UpcomingEvent>(EVENT_ENDPOINTS, "Unable to load upcoming events."),
       requestCollection<ContactMessage>(CONTACT_ENDPOINTS, "Unable to load contact messages."),
       requestCollection<NewsItem>([NEWS_ENDPOINT], "Unable to load news."),
+      requestCollection<PastEdition>([PAST_EDITIONS_ENDPOINT], "Unable to load past editions."),
     ]);
 
     setPosts(postResult.items);
     setNews(newsResult.items);
     setEvents(eventResult.items);
     setMessages(messageResult.items);
+    setPastEditions(pastEditionResult.items);
 
     const failedSections = [
       postResult.error && "blogs",
       eventResult.error && "events",
       messageResult.error && "messages",
       newsResult.error && "news",
+      pastEditionResult.error && "past editions",
     ].filter(Boolean);
 
     if (failedSections.length > 0) {
@@ -459,6 +525,30 @@ const AdminScreen: React.FC = () => {
       selectedEventImagePreviews.forEach((preview) => URL.revokeObjectURL(preview));
     };
   }, [selectedEventImagePreviews]);
+
+  useEffect(() => {
+    setPostPage(1);
+  }, [postSearch]);
+
+  useEffect(() => {
+    setNewsPage(1);
+  }, [newsSearch]);
+
+  useEffect(() => {
+    setEventPage(1);
+  }, [eventSearch]);
+
+  useEffect(() => {
+    setPostPage((page) => Math.min(page, postPageCount));
+  }, [postPageCount]);
+
+  useEffect(() => {
+    setNewsPage((page) => Math.min(page, newsPageCount));
+  }, [newsPageCount]);
+
+  useEffect(() => {
+    setEventPage((page) => Math.min(page, eventPageCount));
+  }, [eventPageCount]);
 
   const handleNewsImageChange = (changeEvent: React.ChangeEvent<HTMLInputElement>) => {
     const file = changeEvent.target.files?.[0];
@@ -739,6 +829,61 @@ const AdminScreen: React.FC = () => {
     }
   };
 
+  const handlePastEditionSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const title = String(formData.get("title") || "").trim();
+    const imageFiles = formData.getAll("images").filter(isUsableImageFile);
+
+    if (imageFiles.length === 0) {
+      setFeedback({ severity: "error", message: "Choose at least one past edition image." });
+      return;
+    }
+
+    const uploadableImages = imageFiles.slice(0, MAX_EVENT_IMAGES);
+    const largeImageNames = getLargeImageNames(uploadableImages);
+
+    if (largeImageNames.length > 0) {
+      setFeedback({ severity: "error", message: buildLargeImageMessage(largeImageNames) });
+      return;
+    }
+
+    if (getTotalFileSize(uploadableImages) > MAX_EVENT_TOTAL_UPLOAD_BYTES) {
+      setFeedback({ severity: "error", message: buildTotalUploadTooLargeMessage() });
+      return;
+    }
+
+    const pastEditionFormData = new FormData();
+    pastEditionFormData.set("title", title);
+    uploadableImages.forEach((image) => {
+      pastEditionFormData.append("images", image);
+    });
+
+    setIsSavingPastEdition(true);
+    try {
+      const createdEditions = await requestJson<PastEdition[]>(
+        [PAST_EDITIONS_ENDPOINT],
+        {
+          method: "POST",
+          body: pastEditionFormData,
+        },
+        "Unable to upload past edition images."
+      );
+
+      setPastEditions((currentEditions) => [...createdEditions, ...currentEditions]);
+      pastEditionFormRef.current?.reset();
+      setSelectedPastEditionImageNames("");
+      setFeedback({ severity: "success", message: "Past edition image uploaded successfully." });
+    } catch (error) {
+      setFeedback({
+        severity: "error",
+        message: error instanceof Error ? error.message : "Unable to upload past edition images.",
+      });
+    } finally {
+      setIsSavingPastEdition(false);
+    }
+  };
+
   const handleDeletePost = async (post: Post) => {
     if (!post._id) {
       setFeedback({ severity: "error", message: "This blog cannot be deleted because it has no database id." });
@@ -781,6 +926,11 @@ const AdminScreen: React.FC = () => {
 
     if (itemToDelete.kind === "news") {
       await handleDeleteNews(itemToDelete.item);
+      return;
+    }
+
+    if (itemToDelete.kind === "pastEdition") {
+      await handleDeletePastEdition(itemToDelete.item);
       return;
     }
 
@@ -835,6 +985,33 @@ const AdminScreen: React.FC = () => {
       setFeedback({
         severity: "error",
         message: error instanceof Error ? error.message : "Unable to delete upcoming event.",
+      });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleDeletePastEdition = async (edition: PastEdition) => {
+    if (!edition._id) {
+      setFeedback({ severity: "error", message: "This past edition image cannot be deleted because it has no database id." });
+      return;
+    }
+
+    setDeletingId(edition._id);
+    setFeedback({ severity: "success", message: "Deleting past edition image..." });
+    try {
+      await requestJson<{ message: string }>(
+        [`${PAST_EDITIONS_ENDPOINT}/${edition._id}`],
+        { method: "DELETE" },
+        "Unable to delete past edition image."
+      );
+
+      setPastEditions((currentEditions) => currentEditions.filter((currentEdition) => currentEdition._id !== edition._id));
+      setFeedback({ severity: "success", message: "Past edition image deleted successfully." });
+    } catch (error) {
+      setFeedback({
+        severity: "error",
+        message: error instanceof Error ? error.message : "Unable to delete past edition image.",
       });
     } finally {
       setDeletingId(null);
@@ -1003,6 +1180,7 @@ const AdminScreen: React.FC = () => {
                 { label: "Magazines", value: magazines, icon: <LibraryBooks /> },
                 { label: "Books", value: books, icon: <AutoStories /> },
                 { label: "Active events", value: activeEvents, icon: <ToggleOn /> },
+                { label: "Past edition images", value: pastEditions.length, icon: <PhotoLibrary /> },
                 { label: "Contact messages", value: messages.length, icon: <Mail /> },
               ].map((item) => (
                 <Paper key={item.label} elevation={0} sx={{ p: 2.25, border: "1px solid #e6e8ec", borderRadius: 2 }}>
@@ -1022,7 +1200,7 @@ const AdminScreen: React.FC = () => {
             </Box>
           )}
 
-          {(activeView === "posts" || activeView === "news" || activeView === "events") && (
+          {(activeView === "posts" || activeView === "news" || activeView === "events" || activeView === "pastEditions") && (
           <Box
             sx={{
               display: "grid",
@@ -1464,6 +1642,89 @@ const AdminScreen: React.FC = () => {
               </Stack>
             </Paper>
             )}
+
+            {activeView === "pastEditions" && (
+            <Paper
+              ref={pastEditionFormRef}
+              component="form"
+              onSubmit={handlePastEditionSubmit}
+              elevation={0}
+              sx={{ p: { xs: 2, md: 3 }, border: "1px solid #e6e8ec", borderRadius: 2 }}
+            >
+              <Stack spacing={2.2}>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
+                    <PhotoLibrary sx={{ color: "#caa64a" }} />
+                    <Typography variant="h6" sx={{ fontWeight: 900 }}>
+                      Add Past Edition Images
+                    </Typography>
+                  </Box>
+                  <Chip size="small" label="Past Editions API" sx={{ bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 800 }} />
+                </Box>
+
+                <Divider />
+
+                {/* <TextField label="Image title" name="title" fullWidth /> */}
+
+                <Box>
+                  <Button
+                    component="label"
+                    variant="outlined"
+                    startIcon={<CloudUpload />}
+                    sx={{
+                      borderColor: "#caa64a",
+                      color: "#6f5517",
+                      textTransform: "none",
+                      fontWeight: 900,
+                      "&:hover": { borderColor: "#caa64a", bgcolor: "#f7edd0" },
+                    }}
+                  >
+                    Select past edition images
+                    <input
+                      hidden
+                      required
+                      multiple
+                      type="file"
+                      name="images"
+                      accept="image/*"
+                      onChange={(changeEvent) => {
+                        const files = Array.from(changeEvent.target.files || []);
+                        const names = files.slice(0, MAX_EVENT_IMAGES).map((file) => file.name).join(", ");
+                        setSelectedPastEditionImageNames(names);
+
+                        if (files.length > MAX_EVENT_IMAGES) {
+                          setFeedback({
+                            severity: "error",
+                            message: `Only ${MAX_EVENT_IMAGES} past edition images can be uploaded at once.`,
+                          });
+                        }
+                      }}
+                    />
+                  </Button>
+                  <Typography sx={{ color: "#667085", fontSize: 13, mt: 1 }}>
+                    {selectedPastEditionImageNames || "No image selected"}
+                  </Typography>
+                </Box>
+
+                <Button
+                  type="submit"
+                  disabled={isSavingPastEdition}
+                  startIcon={<Save />}
+                  sx={{
+                    alignSelf: "flex-start",
+                    bgcolor: "#111318",
+                    color: "#fff",
+                    textTransform: "none",
+                    fontWeight: 900,
+                    px: 3,
+                    "&:hover": { bgcolor: "#2a2f38" },
+                  }}
+                >
+                  {isSavingPastEdition ? "Uploading..." : "Upload images"}
+                </Button>
+              </Stack>
+            </Paper>
+            )}
           </Box>
           )}
 
@@ -1478,11 +1739,38 @@ const AdminScreen: React.FC = () => {
           >
             {activeView === "posts" && (
             <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid #e6e8ec", borderRadius: 2 }}>
-              <Typography variant="h6" sx={{ fontWeight: 900, mb: 2 }}>
-                Recent Blogs
-              </Typography>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: { xs: "stretch", md: "center" },
+                  justifyContent: "space-between",
+                  gap: 1.5,
+                  flexDirection: { xs: "column", md: "row" },
+                  mb: 2,
+                }}
+              >
+                <Typography variant="h6" sx={{ fontWeight: 900 }}>
+                  Recent Blogs
+                </Typography>
+                <TextField
+                  size="small"
+                  value={postSearch}
+                  onChange={(event) => setPostSearch(event.target.value)}
+                  placeholder="Search blogs"
+                  sx={{ minWidth: { xs: "100%", md: 280 } }}
+                  slotProps={{
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Search fontSize="small" />
+                        </InputAdornment>
+                      ),
+                    },
+                  }}
+                />
+              </Box>
               <Stack spacing={1.5}>
-                {posts.map((post) => (
+                {visiblePosts.map((post) => (
                   <Box
                     key={post._id || `${post.title}-${post.createdAt}`}
                     sx={{
@@ -1543,8 +1831,19 @@ const AdminScreen: React.FC = () => {
                   </Box>
                 ))}
 
-                {!posts.length && !isLoading && (
-                  <Typography sx={{ color: "#667085" }}>No blogs returned from the API yet.</Typography>
+                {!filteredPosts.length && !isLoading && (
+                  <Typography sx={{ color: "#667085" }}>
+                    {posts.length ? "No blogs match your search." : "No blogs returned from the API yet."}
+                  </Typography>
+                )}
+
+                {filteredPosts.length > ADMIN_PAGE_SIZE && (
+                  <Pagination
+                    count={postPageCount}
+                    page={postPage}
+                    onChange={(_, page) => setPostPage(page)}
+                    sx={{ alignSelf: "center", pt: 1 }}
+                  />
                 )}
               </Stack>
             </Paper>
@@ -1552,11 +1851,38 @@ const AdminScreen: React.FC = () => {
 
             {activeView === "news" && (
             <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid #e6e8ec", borderRadius: 2 }}>
-              <Typography variant="h6" sx={{ fontWeight: 900, mb: 2 }}>
-                Recent News
-              </Typography>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: { xs: "stretch", md: "center" },
+                  justifyContent: "space-between",
+                  gap: 1.5,
+                  flexDirection: { xs: "column", md: "row" },
+                  mb: 2,
+                }}
+              >
+                <Typography variant="h6" sx={{ fontWeight: 900 }}>
+                  Recent News
+                </Typography>
+                <TextField
+                  size="small"
+                  value={newsSearch}
+                  onChange={(event) => setNewsSearch(event.target.value)}
+                  placeholder="Search news"
+                  sx={{ minWidth: { xs: "100%", md: 280 } }}
+                  slotProps={{
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Search fontSize="small" />
+                        </InputAdornment>
+                      ),
+                    },
+                  }}
+                />
+              </Box>
               <Stack spacing={1.5}>
-                {news.map((newsItem) => (
+                {visibleNews.map((newsItem) => (
                   <Box
                     key={newsItem._id || `${newsItem.title}-${newsItem.createdAt}`}
                     sx={{
@@ -1616,8 +1942,19 @@ const AdminScreen: React.FC = () => {
                   </Box>
                 ))}
 
-                {!news.length && !isLoading && (
-                  <Typography sx={{ color: "#667085" }}>No news returned from the API yet.</Typography>
+                {!filteredNews.length && !isLoading && (
+                  <Typography sx={{ color: "#667085" }}>
+                    {news.length ? "No news match your search." : "No news returned from the API yet."}
+                  </Typography>
+                )}
+
+                {filteredNews.length > ADMIN_PAGE_SIZE && (
+                  <Pagination
+                    count={newsPageCount}
+                    page={newsPage}
+                    onChange={(_, page) => setNewsPage(page)}
+                    sx={{ alignSelf: "center", pt: 1 }}
+                  />
                 )}
               </Stack>
             </Paper>
@@ -1625,11 +1962,38 @@ const AdminScreen: React.FC = () => {
 
             {activeView === "events" && (
             <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid #e6e8ec", borderRadius: 2 }}>
-              <Typography variant="h6" sx={{ fontWeight: 900, mb: 2 }}>
-                Upcoming Events
-              </Typography>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: { xs: "stretch", md: "center" },
+                  justifyContent: "space-between",
+                  gap: 1.5,
+                  flexDirection: { xs: "column", md: "row" },
+                  mb: 2,
+                }}
+              >
+                <Typography variant="h6" sx={{ fontWeight: 900 }}>
+                  Upcoming Events
+                </Typography>
+                <TextField
+                  size="small"
+                  value={eventSearch}
+                  onChange={(changeEvent) => setEventSearch(changeEvent.target.value)}
+                  placeholder="Search events"
+                  sx={{ minWidth: { xs: "100%", md: 280 } }}
+                  slotProps={{
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Search fontSize="small" />
+                        </InputAdornment>
+                      ),
+                    },
+                  }}
+                />
+              </Box>
               <Stack spacing={1.25}>
-                {events.map((event) => (
+                {visibleEvents.map((event) => (
                   <Box
                     key={event._id || `${event.title}-${event.createdAt}`}
                     sx={{
@@ -1680,10 +2044,93 @@ const AdminScreen: React.FC = () => {
                   </Box>
                 ))}
 
-                {!events.length && !isLoading && (
-                  <Typography sx={{ color: "#667085" }}>No upcoming events returned from the API yet.</Typography>
+                {!filteredEvents.length && !isLoading && (
+                  <Typography sx={{ color: "#667085" }}>
+                    {events.length ? "No events match your search." : "No upcoming events returned from the API yet."}
+                  </Typography>
+                )}
+
+                {filteredEvents.length > ADMIN_PAGE_SIZE && (
+                  <Pagination
+                    count={eventPageCount}
+                    page={eventPage}
+                    onChange={(_, page) => setEventPage(page)}
+                    sx={{ alignSelf: "center", pt: 1 }}
+                  />
                 )}
               </Stack>
+            </Paper>
+            )}
+
+            {activeView === "pastEditions" && (
+            <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid #e6e8ec", borderRadius: 2 }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: { xs: "flex-start", md: "center" },
+                  justifyContent: "space-between",
+                  gap: 2,
+                  flexDirection: { xs: "column", md: "row" },
+                  mb: 2,
+                }}
+              >
+                <Typography variant="h6" sx={{ fontWeight: 900 }}>
+                  Past Edition Images
+                </Typography>
+                <Chip
+                  size="small"
+                  label={`${pastEditions.length} total`}
+                  sx={{ bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 900 }}
+                />
+              </Box>
+
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: { xs: "repeat(2, minmax(0, 1fr))", md: "repeat(4, minmax(0, 1fr))" },
+                  gap: 1.5,
+                }}
+              >
+                {pastEditions.map((edition, index) => (
+                  <Box
+                    key={edition._id || `${edition.image}-${index}`}
+                    sx={{
+                      position: "relative",
+                      aspectRatio: "3 / 4",
+                      overflow: "hidden",
+                      borderRadius: 1.5,
+                      bgcolor: "#111318",
+                    }}
+                  >
+                    <Box
+                      component="img"
+                      src={edition.image}
+                      alt={edition.title || `Past edition ${index + 1}`}
+                      sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                    />
+                    <IconButton
+                      aria-label="Delete past edition image"
+                      onClick={() => setPendingDelete({ kind: "pastEdition", item: edition })}
+                      disabled={deletingId === edition._id}
+                      size="small"
+                      sx={{
+                        position: "absolute",
+                        top: 8,
+                        right: 8,
+                        bgcolor: "rgba(0,0,0,0.72)",
+                        color: "#fff",
+                        "&:hover": { bgcolor: "#b42318" },
+                      }}
+                    >
+                      <Delete fontSize="small" />
+                    </IconButton>
+                  </Box>
+                ))}
+              </Box>
+
+              {!pastEditions.length && !isLoading && (
+                <Typography sx={{ color: "#667085" }}>No past edition images returned from the API yet.</Typography>
+              )}
             </Paper>
             )}
 

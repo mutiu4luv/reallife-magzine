@@ -7,11 +7,13 @@ import PhotoGallery from "./PhotoGallery"
 import AboutSection from "./AboutSection"
 import InterviewSection from "./InterviewSection"
 import Footer from "./Footer"
+import Pastedition from "./Pastedition"
 const Landingpage = () => {
   return (
     <div>
       <MarqueeBar />
       <Hero />
+      <Pastedition />
       <Reallife /> 
       <BenefitSection /> 
       <Testimoney />

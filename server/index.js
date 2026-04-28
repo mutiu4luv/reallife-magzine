@@ -60,7 +60,7 @@ const ensureDatabase = async () => {
   } catch {
     await fs.writeFile(
       DB_PATH,
-      JSON.stringify({ posts: [], news: [], upcomingEvents: [], contactMessages: [] }, null, 2)
+      JSON.stringify({ posts: [], news: [], upcomingEvents: [], contactMessages: [], pastEditions: [] }, null, 2)
     );
   }
 };
@@ -75,6 +75,7 @@ const readDatabase = async () => {
     news: Array.isArray(data.news) ? data.news : [],
     upcomingEvents: Array.isArray(data.upcomingEvents) ? data.upcomingEvents : [],
     contactMessages: Array.isArray(data.contactMessages) ? data.contactMessages : [],
+    pastEditions: Array.isArray(data.pastEditions) ? data.pastEditions : [],
   };
 };
 
@@ -338,6 +339,59 @@ app.delete(["/api/upcoming-events/:id", "/api/events/:id"], async (req, res, nex
     db.upcomingEvents = nextItems;
     await writeDatabase(db);
     res.json({ message: "Upcoming event deleted successfully." });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/past-editions", async (_req, res, next) => {
+  try {
+    const db = await readDatabase();
+    res.json(db.pastEditions);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/past-editions", upload.array("images", 8), async (req, res, next) => {
+  try {
+    const title = String(req.body.title || "").trim();
+    const files = Array.isArray(req.files) ? req.files : [];
+
+    if (files.length === 0) {
+      res.status(400).json({ message: "At least one image is required." });
+      return;
+    }
+
+    const db = await readDatabase();
+    const editions = files.map((file, index) =>
+      createRecord({
+        title: title || `Past edition ${db.pastEditions.length + index + 1}`,
+        image: toImageUrl(req, file),
+      })
+    );
+
+    db.pastEditions.unshift(...editions);
+    await writeDatabase(db);
+    res.status(201).json(editions);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/past-editions/:id", async (req, res, next) => {
+  try {
+    const db = await readDatabase();
+    const nextItems = db.pastEditions.filter((item) => !matchesId(item, req.params.id));
+
+    if (nextItems.length === db.pastEditions.length) {
+      notFound(res, "Past edition image not found.");
+      return;
+    }
+
+    db.pastEditions = nextItems;
+    await writeDatabase(db);
+    res.json({ message: "Past edition image deleted successfully." });
   } catch (error) {
     next(error);
   }

@@ -2,6 +2,7 @@ import { API_BASE_URL } from "../config/api";
 
 export const NEWS_ENDPOINT = `${API_BASE_URL}/api/news`;
 export const POSTS_ENDPOINT = `${API_BASE_URL}/api/posts`;
+export const PAST_EDITIONS_ENDPOINT = `${API_BASE_URL}/api/past-editions`;
 export const UPCOMING_EVENTS_ENDPOINTS = [
   `${API_BASE_URL}/api/upcoming-events`,
   `${API_BASE_URL}/api/events`,
@@ -37,6 +38,14 @@ export type EventItem = {
   desc?: string;
   images: string[];
   isActive?: boolean;
+  createdAt?: string;
+};
+
+export type PastEditionItem = {
+  _id?: string;
+  id?: string;
+  title?: string;
+  image: string;
   createdAt?: string;
 };
 
@@ -117,6 +126,16 @@ export const requestJson = async <T,>(
 export const loadNews = async () =>
   normalizeCollection<NewsItem>(await requestJson<unknown>([NEWS_ENDPOINT], undefined, "Unable to load news.")).map(
     normalizeNewsItem
+  );
+
+export const loadPosts = async () =>
+  normalizeCollection<PostItem>(await requestJson<unknown>([POSTS_ENDPOINT], undefined, "Unable to load posts.")).map(
+    normalizePostItem
+  );
+
+export const loadPastEditions = async () =>
+  normalizeCollection<PastEditionItem>(
+    await requestJson<unknown>([PAST_EDITIONS_ENDPOINT], undefined, "Unable to load past editions.")
   );
 
 export const loadNewsById = async (id: string) =>
