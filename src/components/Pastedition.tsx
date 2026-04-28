@@ -167,7 +167,7 @@ const Pastedition: React.FC = () => {
             },
           }}
         >
-          Our Last Edition
+          Our Past Editions
         </Typography>
 
         <Typography
@@ -181,8 +181,8 @@ const Pastedition: React.FC = () => {
             textAlign: "left",
           }}
         >
-          Take a look back at our past Reality Life Magazine editions, capturing inspiring stories,
-          memorable features, powerful moments, and the voices that shaped our journey so far.
+          Take a look back at our past Reality Life Magazine editions of Reality Life Magazines, capturing Moments, inspiring stories,
+          memorable features and the voices that shape our journey. At Reality Life Magzine, We document histories/events for a lasting memories. Your legacy live on...
         </Typography>
       </Box>
 
