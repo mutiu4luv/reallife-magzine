@@ -182,7 +182,7 @@ const Pastedition: React.FC = () => {
           }}
         >
           Take a look  at  past editions of Reality Life Magazine, capturing Moments, inspiring stories,
-          memorable features and the voices that shape our society. At Reality Life Magazine, we celebrate culture, We document histories/events, for a lasting memories. Your legacy live on...
+          memorable features and the voices that shape our society. At Reality Life Magazine, we celebrate culture, We document histories/events, for a lasting memories. Your legacies lives on...
         </Typography>
       </Box>
 

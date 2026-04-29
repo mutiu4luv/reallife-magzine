@@ -421,8 +421,9 @@ RealityLife News          </Typography>
                   alt={post.title}
                   sx={{
                     width: "100%",
-                    height: 180,
-                    objectFit: "cover",
+                    height: { xs: "auto", sm: 180 },
+                    objectFit: { xs: "contain", sm: "cover" },
+                    display: "block",
                   }}
                 />
 

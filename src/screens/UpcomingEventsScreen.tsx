@@ -286,7 +286,12 @@ const UpcomingEventsScreen: React.FC = () => {
                           component="img"
                           src={primaryImage}
                           alt={eventItem.title}
-                          sx={{ width: "100%", height: 190, objectFit: "cover", display: "block" }}
+                          sx={{
+                            width: "100%",
+                            height: { xs: "auto", sm: 190 },
+                            objectFit: { xs: "contain", sm: "cover" },
+                            display: "block",
+                          }}
                         />
 
                         {secondaryImages.length > 0 && (

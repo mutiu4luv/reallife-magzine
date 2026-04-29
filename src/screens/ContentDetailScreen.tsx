@@ -196,7 +196,17 @@ const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
                     boxShadow: "0 24px 70px rgba(0,0,0,0.3)",
                   }}
                 >
-                  <Box component="img" src={item.image} alt={item.title} sx={{ width: "100%", height: { xs: 320, md: 560 }, objectFit: "cover", display: "block" }} />
+                  <Box
+                    component="img"
+                    src={item.image}
+                    alt={item.title}
+                    sx={{
+                      width: "100%",
+                      height: { xs: "auto", md: 560 },
+                      objectFit: { xs: "contain", md: "cover" },
+                      display: "block",
+                    }}
+                  />
                 </Paper>
               )}
 
@@ -253,7 +263,12 @@ const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
                         component="img"
                         src={image}
                         alt={`${item.title} ${index + 2}`}
-                        sx={{ width: "100%", height: 230, objectFit: "cover", display: "block" }}
+                        sx={{
+                          width: "100%",
+                          height: { xs: "auto", sm: 230 },
+                          objectFit: { xs: "contain", sm: "cover" },
+                          display: "block",
+                        }}
                       />
                     </Paper>
                   ))}

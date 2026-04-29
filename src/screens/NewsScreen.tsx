@@ -158,7 +158,17 @@ const NewsScreen: React.FC = () => {
               return (
                 <motion.div key={itemId || `${item.title}-${currentPage}-${index}`} initial="hidden" whileInView="show" viewport={{ once: false }} variants={fadeUp} style={{ display: "flex" }}>
                   <Paper elevation={0} sx={{ width: "100%", borderRadius: 5, overflow: "hidden", bgcolor: "#f7f7fa", display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(34,34,34,0.10)", border: "1.5px solid #ececec", transition: "0.3s", minHeight: 420, "&:hover": { transform: "translateY(-10px) scale(1.03)", boxShadow: `0 16px 40px ${gold}22`, borderColor: gold } }}>
-                    <Box component="img" src={item.image} alt={item.title} sx={{ width: "100%", height: 180, objectFit: "cover" }} />
+                    <Box
+                      component="img"
+                      src={item.image}
+                      alt={item.title}
+                      sx={{
+                        width: "100%",
+                        height: { xs: "auto", sm: 180 },
+                        objectFit: { xs: "contain", sm: "cover" },
+                        display: "block",
+                      }}
+                    />
                     <Box sx={{ p: 3, display: "flex", flexDirection: "column", flex: 1 }}>
                       <Chip label={formatDate(item.createdAt)} size="small" sx={{ alignSelf: "flex-start", mb: 1.5, bgcolor: gold, color: "#fff", fontWeight: 700 }} />
                       <Typography sx={{ fontWeight: 800, fontSize: 20, mb: 1 }}>{item.title}</Typography>
