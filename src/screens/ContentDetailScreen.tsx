@@ -1,25 +1,17 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
+import { Link as RouterLink, useParams } from "react-router-dom";
 import {
-  Alert,
   Box,
   Button,
   Chip,
   Container,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   Divider,
-  IconButton,
   Paper,
-  Snackbar,
   Typography,
 } from "@mui/material";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
-import DeleteIcon from "@mui/icons-material/Delete";
 import LocalDiningIcon from "@mui/icons-material/LocalDining";
 import PersonIcon from "@mui/icons-material/Person";
 import TerrainIcon from "@mui/icons-material/Terrain";
@@ -32,11 +24,9 @@ import {
   loadPostById,
   loadUpcomingEvents,
   loadUpcomingEventById,
-  requestJson,
   type EventItem,
   type NewsItem,
   type PostItem,
-  UPCOMING_EVENTS_ENDPOINTS,
 } from "../services/contentApi";
 
 const gold = "#A67C1B";
@@ -268,15 +258,11 @@ const sortNewestFirst = <T extends { createdAt?: string }>(items: T[]) =>
 
 const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
   const { id } = useParams();
-  const navigate = useNavigate();
   const [item, setItem] = useState<DetailItem | null>(null);
   const [relatedItems, setRelatedItems] = useState<RelatedItem[]>([]);
   const [relatedLoading, setRelatedLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [feedback, setFeedback] = useState<{ severity: "success" | "error"; message: string } | null>(null);
 
   const backPath = useMemo(() => backPathByKind(kind), [kind]);
 
@@ -371,34 +357,6 @@ const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
   const contextLabel = kind === "event" ? "Experience" : kind === "news" ? "Newsroom" : "Lifestyle";
   const contentImageFit = kind === "event" ? "contain" : "cover";
   const contentImageBg = kind === "event" ? "#0f1712" : "#15130f";
-
-  const handleDeleteEvent = async () => {
-    if (kind !== "event" || !item?.id) {
-      setFeedback({ severity: "error", message: "This event cannot be deleted because it has no database id." });
-      return;
-    }
-
-    setIsDeleting(true);
-
-    try {
-      await requestJson<{ message: string }>(
-        UPCOMING_EVENTS_ENDPOINTS.map((endpoint) => `${endpoint}/${item.id}`),
-        { method: "DELETE" },
-        "Unable to delete upcoming event."
-      );
-
-      setDeleteDialogOpen(false);
-      setFeedback({ severity: "success", message: "Upcoming event deleted successfully." });
-      window.setTimeout(() => navigate("/events"), 650);
-    } catch (deleteError) {
-      setFeedback({
-        severity: "error",
-        message: deleteError instanceof Error ? deleteError.message : "Unable to delete upcoming event.",
-      });
-    } finally {
-      setIsDeleting(false);
-    }
-  };
 
   return (
     <>
@@ -609,32 +567,6 @@ const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
                     </Box>
                   ))}
 
-                  {kind === "event" && (
-                    <>
-                      <Divider sx={{ my: 1.75, borderColor: "rgba(255,255,255,0.12)" }} />
-                      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5 }}>
-                        <Box>
-                          <Typography sx={{ color: "#9ba39d", fontSize: 12, fontWeight: 800 }}>
-                            Admin action
-                          </Typography>
-                          <Typography sx={{ color: ivory, fontWeight: 900 }}>Delete event</Typography>
-                        </Box>
-                        <IconButton
-                          aria-label={`Delete ${item.title}`}
-                          onClick={() => setDeleteDialogOpen(true)}
-                          disabled={isDeleting}
-                          sx={{
-                            color: "#ffb4a9",
-                            border: "1px solid rgba(255,180,169,0.44)",
-                            borderRadius: 1.25,
-                            "&:hover": { bgcolor: "rgba(180,35,24,0.18)", borderColor: "#ffb4a9" },
-                          }}
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Box>
-                    </>
-                  )}
                 </Paper>
 
                 <Paper
@@ -918,49 +850,6 @@ const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
           </Container>
         )}
       </Box>
-      <Dialog open={deleteDialogOpen} onClose={() => !isDeleting && setDeleteDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 900 }}>Delete event?</DialogTitle>
-        <DialogContent>
-          <Typography sx={{ color: "#4a4f58", lineHeight: 1.7 }}>
-            Do you want to delete "{item?.title}"? This action cannot be undone.
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2.5 }}>
-          <Button
-            onClick={() => setDeleteDialogOpen(false)}
-            disabled={isDeleting}
-            sx={{ color: "#4a4f58", fontWeight: 800, textTransform: "none" }}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleDeleteEvent}
-            disabled={isDeleting}
-            startIcon={<DeleteIcon />}
-            sx={{
-              bgcolor: "#b42318",
-              color: "#fff",
-              fontWeight: 900,
-              textTransform: "none",
-              "&:hover": { bgcolor: "#912018" },
-            }}
-          >
-            {isDeleting ? "Deleting..." : "Delete"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-      <Snackbar
-        open={Boolean(feedback)}
-        autoHideDuration={3200}
-        onClose={() => setFeedback(null)}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-      >
-        {feedback ? (
-          <Alert severity={feedback.severity} onClose={() => setFeedback(null)} variant="filled">
-            {feedback.message}
-          </Alert>
-        ) : undefined}
-      </Snackbar>
       <Footer />
     </>
   );
