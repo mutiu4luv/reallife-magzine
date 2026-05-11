@@ -71,6 +71,7 @@ type Post = {
 
 type UpcomingEvent = {
   _id?: string;
+  id?: string;
   title: string;
   description?: string;
   images?: string[];
@@ -965,21 +966,25 @@ const AdminScreen: React.FC = () => {
   };
 
   const handleDeleteEvent = async (eventItem: UpcomingEvent) => {
-    if (!eventItem._id) {
+    const eventId = eventItem._id || eventItem.id;
+
+    if (!eventId) {
       setFeedback({ severity: "error", message: "This event cannot be deleted because it has no database id." });
       return;
     }
 
-    setDeletingId(eventItem._id);
+    setDeletingId(eventId);
     setFeedback({ severity: "success", message: `Deleting "${eventItem.title}"...` });
     try {
       await requestJson<{ message: string }>(
-        EVENT_ENDPOINTS.map((endpoint) => `${endpoint}/${eventItem._id}`),
+        EVENT_ENDPOINTS.map((endpoint) => `${endpoint}/${eventId}`),
         { method: "DELETE" },
         "Unable to delete upcoming event."
       );
 
-      setEvents((currentEvents) => currentEvents.filter((currentEvent) => currentEvent._id !== eventItem._id));
+      setEvents((currentEvents) =>
+        currentEvents.filter((currentEvent) => (currentEvent._id || currentEvent.id) !== eventId)
+      );
       setFeedback({ severity: "success", message: "Upcoming event deleted successfully." });
     } catch (error) {
       setFeedback({
@@ -1993,56 +1998,110 @@ const AdminScreen: React.FC = () => {
                 />
               </Box>
               <Stack spacing={1.25}>
-                {visibleEvents.map((event) => (
-                  <Box
-                    key={event._id || `${event.title}-${event.createdAt}`}
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 2,
-                      border: "1px solid #edf0f2",
-                      borderRadius: 1.5,
-                      p: 1.5,
-                    }}
-                  >
-                    <Box sx={{ minWidth: 0 }}>
-                      <Typography sx={{ fontWeight: 900, color: "#171a20" }} noWrap>
-                        {event.title}
-                      </Typography>
-                      <Typography sx={{ color: "#667085", fontSize: 13 }} noWrap>
-                        {event.description || formatDate(event.createdAt)}
-                      </Typography>
-                    </Box>
-                    <Chip
-                      size="small"
-                      label={`${event.images?.length || 0} images`}
-                      sx={{ display: { xs: "none", sm: "inline-flex" }, fontWeight: 900 }}
-                    />
+                {visibleEvents.map((event) => {
+                  const eventId = event._id || event.id;
+                  const eventImage = event.images?.[0] || "";
+
+                  return (
+                    <Box
+                      key={eventId || `${event.title}-${event.createdAt}`}
+                      sx={{
+                        display: "grid",
+                        gridTemplateColumns: { xs: "88px minmax(0, 1fr) 44px", md: "112px minmax(0, 1fr) auto auto 44px" },
+                        alignItems: "center",
+                        gap: { xs: 1.25, md: 2 },
+                        border: "1px solid #edf0f2",
+                        borderRadius: 1.5,
+                        p: 1.25,
+                        bgcolor: "#fff",
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          width: "100%",
+                          aspectRatio: "4 / 3",
+                          borderRadius: 1.25,
+                          overflow: "hidden",
+                          bgcolor: "#111318",
+                          border: "1px solid #edf0f2",
+                        }}
+                      >
+                        {eventImage ? (
+                          <Box
+                            component="img"
+                            src={eventImage}
+                            alt={event.title}
+                            sx={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+                          />
+                        ) : (
+                          <Box
+                            sx={{
+                              width: "100%",
+                              height: "100%",
+                              display: "grid",
+                              placeItems: "center",
+                              color: "#98a2b3",
+                              bgcolor: "#f2f4f7",
+                            }}
+                          >
+                            <Image fontSize="small" />
+                          </Box>
+                        )}
+                      </Box>
+
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography sx={{ fontWeight: 900, color: "#171a20" }} noWrap>
+                          {event.title}
+                        </Typography>
+                        <Typography sx={{ color: "#667085", fontSize: 13 }} noWrap>
+                          {event.description || formatDate(event.createdAt)}
+                        </Typography>
+                        <Box sx={{ display: { xs: "flex", md: "none" }, gap: 0.75, flexWrap: "wrap", mt: 1 }}>
+                          <Chip size="small" label={`${event.images?.length || 0} images`} sx={{ fontWeight: 900 }} />
+                          <Chip
+                            size="small"
+                            label={event.isActive ? "Active" : "Hidden"}
+                            sx={{
+                              fontWeight: 900,
+                              bgcolor: event.isActive ? "#ecfdf3" : "#f2f4f7",
+                              color: event.isActive ? "#027a48" : "#667085",
+                            }}
+                          />
+                        </Box>
+                      </Box>
+
+                      <Chip
+                        size="small"
+                        label={`${event.images?.length || 0} images`}
+                        sx={{ display: { xs: "none", md: "inline-flex" }, fontWeight: 900 }}
+                      />
                       <Chip
                         size="small"
                         label={event.isActive ? "Active" : "Hidden"}
-                      sx={{
-                        fontWeight: 900,
-                        bgcolor: event.isActive ? "#ecfdf3" : "#f2f4f7",
-                        color: event.isActive ? "#027a48" : "#667085",
-                      }}
-                    />
-                    <IconButton
-                      aria-label={`Delete ${event.title}`}
-                      onClick={() => setPendingDelete({ kind: "event", item: event })}
-                      disabled={deletingId === event._id}
-                      sx={{
-                        color: "#b42318",
-                        border: "1px solid #fda29b",
-                        borderRadius: 1.25,
-                        "&:hover": { bgcolor: "#fff1f3", borderColor: "#f97066" },
-                      }}
-                    >
-                      <Delete fontSize="small" />
-                    </IconButton>
-                  </Box>
-                ))}
+                        sx={{
+                          display: { xs: "none", md: "inline-flex" },
+                          fontWeight: 900,
+                          bgcolor: event.isActive ? "#ecfdf3" : "#f2f4f7",
+                          color: event.isActive ? "#027a48" : "#667085",
+                        }}
+                      />
+                      <IconButton
+                        aria-label={`Delete ${event.title}`}
+                        onClick={() => setPendingDelete({ kind: "event", item: event })}
+                        disabled={deletingId === eventId}
+                        sx={{
+                          color: "#b42318",
+                          border: "1px solid #fda29b",
+                          borderRadius: 1.25,
+                          bgcolor: "#fff",
+                          "&:hover": { bgcolor: "#fff1f3", borderColor: "#f97066" },
+                        }}
+                      >
+                        <Delete fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  );
+                })}
 
                 {!filteredEvents.length && !isLoading && (
                   <Typography sx={{ color: "#667085" }}>
