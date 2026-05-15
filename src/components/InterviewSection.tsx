@@ -195,7 +195,7 @@ const InterviewSection: React.FC = () => {
       <Box
   sx={{
     display: "grid",
-    gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(3, minmax(0, 1fr))" },
+    gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", md: "repeat(3, minmax(0, 1fr))" },
     justifyContent: "center",
     gap: { xs: 3, md: 4 },
   }}
@@ -237,8 +237,11 @@ const InterviewSection: React.FC = () => {
             alt={item.name}
             sx={{
               width: "100%",
-              height: { xs: 320, sm: 360, md: 400, lg: 420 },
-              objectFit: "cover",
+              height: { xs: 340, sm: 380, md: 420 },
+              objectFit: "contain",
+              objectPosition: "center top",
+              bgcolor: "#080806",
+              display: "block",
             }}
           />
 
