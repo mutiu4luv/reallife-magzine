@@ -30,6 +30,7 @@ import {
   CloudUpload,
   Dashboard,
   Delete,
+  Edit,
   EventAvailable,
   Image,
   LibraryBooks,
@@ -112,6 +113,12 @@ type PendingDelete =
   | { kind: "news"; item: NewsItem }
   | { kind: "event"; item: UpcomingEvent }
   | { kind: "pastEdition"; item: PastEdition }
+  | null;
+
+type PendingEdit =
+  | { kind: "post"; item: Post }
+  | { kind: "news"; item: NewsItem }
+  | { kind: "event"; item: UpcomingEvent }
   | null;
 
 type ActiveView = "dashboard" | "posts" | "news" | "events" | "pastEditions" | "messages";
@@ -438,6 +445,10 @@ const AdminScreen: React.FC = () => {
   const [selectedEventImageCount, setSelectedEventImageCount] = useState(0);
   const [selectedEventImagePreviews, setSelectedEventImagePreviews] = useState<string[]>([]);
   const [pendingDelete, setPendingDelete] = useState<PendingDelete>(null);
+  const [pendingEdit, setPendingEdit] = useState<PendingEdit>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [selectedEditImageNames, setSelectedEditImageNames] = useState("");
+  const [selectedEditImagePreviews, setSelectedEditImagePreviews] = useState<string[]>([]);
   const [activeView, setActiveView] = useState<ActiveView>("dashboard");
   const [postSearch, setPostSearch] = useState("");
   const [newsSearch, setNewsSearch] = useState("");
@@ -464,9 +475,12 @@ const AdminScreen: React.FC = () => {
   const postPageCount = useMemo(() => getPageCount(filteredPosts.length), [filteredPosts.length]);
   const newsPageCount = useMemo(() => getPageCount(filteredNews.length), [filteredNews.length]);
   const eventPageCount = useMemo(() => getPageCount(filteredEvents.length), [filteredEvents.length]);
-  const visiblePosts = useMemo(() => paginateItems(filteredPosts, postPage), [filteredPosts, postPage]);
-  const visibleNews = useMemo(() => paginateItems(filteredNews, newsPage), [filteredNews, newsPage]);
-  const visibleEvents = useMemo(() => paginateItems(filteredEvents, eventPage), [eventPage, filteredEvents]);
+  const safePostPage = Math.min(postPage, postPageCount);
+  const safeNewsPage = Math.min(newsPage, newsPageCount);
+  const safeEventPage = Math.min(eventPage, eventPageCount);
+  const visiblePosts = useMemo(() => paginateItems(filteredPosts, safePostPage), [filteredPosts, safePostPage]);
+  const visibleNews = useMemo(() => paginateItems(filteredNews, safeNewsPage), [filteredNews, safeNewsPage]);
+  const visibleEvents = useMemo(() => paginateItems(filteredEvents, safeEventPage), [safeEventPage, filteredEvents]);
   const currentView = viewCopy[activeView];
 
   const loadAdminData = useCallback(async () => {
@@ -528,28 +542,10 @@ const AdminScreen: React.FC = () => {
   }, [selectedEventImagePreviews]);
 
   useEffect(() => {
-    setPostPage(1);
-  }, [postSearch]);
-
-  useEffect(() => {
-    setNewsPage(1);
-  }, [newsSearch]);
-
-  useEffect(() => {
-    setEventPage(1);
-  }, [eventSearch]);
-
-  useEffect(() => {
-    setPostPage((page) => Math.min(page, postPageCount));
-  }, [postPageCount]);
-
-  useEffect(() => {
-    setNewsPage((page) => Math.min(page, newsPageCount));
-  }, [newsPageCount]);
-
-  useEffect(() => {
-    setEventPage((page) => Math.min(page, eventPageCount));
-  }, [eventPageCount]);
+    return () => {
+      selectedEditImagePreviews.forEach((preview) => URL.revokeObjectURL(preview));
+    };
+  }, [selectedEditImagePreviews]);
 
   const handleNewsImageChange = (changeEvent: React.ChangeEvent<HTMLInputElement>) => {
     const file = changeEvent.target.files?.[0];
@@ -659,6 +655,176 @@ const AdminScreen: React.FC = () => {
   const handleRemoveEventImage = (imageIndex: number) => {
     const remainingImages = selectedEventImages.filter((_, index) => index !== imageIndex);
     updateEventImageState(remainingImages);
+  };
+
+  const clearEditImageState = () => {
+    selectedEditImagePreviews.forEach((preview) => URL.revokeObjectURL(preview));
+    setSelectedEditImageNames("");
+    setSelectedEditImagePreviews([]);
+  };
+
+  const handleOpenEdit = (editItem: Exclude<PendingEdit, null>) => {
+    clearEditImageState();
+    setPendingEdit(editItem);
+  };
+
+  const handleCloseEdit = () => {
+    if (isUpdating) {
+      return;
+    }
+
+    setPendingEdit(null);
+    clearEditImageState();
+  };
+
+  const handleEditImagesChange = (changeEvent: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(changeEvent.target.files || []);
+    clearEditImageState();
+
+    if (!files.length) {
+      return;
+    }
+
+    const imageFiles = files.filter((file) => file.type.startsWith("image/"));
+
+    if (imageFiles.length !== files.length) {
+      changeEvent.target.value = "";
+      setFeedback({ severity: "error", message: "Please choose image files only." });
+      return;
+    }
+
+    const uploadableImages = pendingEdit?.kind === "event" ? imageFiles.slice(0, MAX_EVENT_IMAGES) : imageFiles.slice(0, 1);
+    const largeImageNames = getLargeImageNames(uploadableImages);
+
+    if (largeImageNames.length > 0) {
+      changeEvent.target.value = "";
+      setFeedback({ severity: "error", message: buildLargeImageMessage(largeImageNames) });
+      return;
+    }
+
+    if (pendingEdit?.kind === "event" && getTotalFileSize(uploadableImages) > MAX_EVENT_TOTAL_UPLOAD_BYTES) {
+      changeEvent.target.value = "";
+      setFeedback({ severity: "error", message: buildTotalUploadTooLargeMessage() });
+      return;
+    }
+
+    if (pendingEdit?.kind === "event" && imageFiles.length > MAX_EVENT_IMAGES) {
+      setFeedback({ severity: "error", message: `Only ${MAX_EVENT_IMAGES} event images can be uploaded.` });
+    }
+
+    setSelectedEditImageNames(uploadableImages.map((file) => file.name).join(", "));
+    setSelectedEditImagePreviews(uploadableImages.map((file) => URL.createObjectURL(file)));
+  };
+
+  const handleEditSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!pendingEdit) {
+      return;
+    }
+
+    const itemId = pendingEdit.kind === "event" ? pendingEdit.item._id || pendingEdit.item.id : pendingEdit.item._id;
+
+    if (!itemId) {
+      setFeedback({ severity: "error", message: "This item cannot be updated because it has no database id." });
+      return;
+    }
+
+    const formData = new FormData(event.currentTarget);
+    const title = String(formData.get("title") || "").trim();
+    const description = String(formData.get(pendingEdit.kind === "post" ? "desc" : "description") || "").trim();
+
+    if (!title || !description) {
+      setFeedback({ severity: "error", message: "Title and description are required." });
+      return;
+    }
+
+    const updateFormData = new FormData();
+    updateFormData.set("title", title);
+
+    if (pendingEdit.kind === "post") {
+      const type = String(formData.get("type") || "Magazine") as PostType;
+      const image = formData.get("image");
+
+      updateFormData.set("desc", description);
+      updateFormData.set("type", type);
+
+      if (isUsableImageFile(image)) {
+        updateFormData.set("image", image);
+      }
+
+      setIsUpdating(true);
+      try {
+        const updatedPost = await requestJson<Post>(
+          [`${POST_ENDPOINT}/${itemId}`],
+          { method: "PUT", body: updateFormData },
+          "Unable to update blog."
+        );
+        setPosts((currentPosts) => currentPosts.map((post) => (post._id === itemId ? updatedPost : post)));
+        setFeedback({ severity: "success", message: "Blog updated successfully." });
+        setPendingEdit(null);
+        clearEditImageState();
+      } catch (error) {
+        setFeedback({ severity: "error", message: error instanceof Error ? error.message : "Unable to update blog." });
+      } finally {
+        setIsUpdating(false);
+      }
+      return;
+    }
+
+    if (pendingEdit.kind === "news") {
+      const image = formData.get("image");
+      updateFormData.set("description", description);
+
+      if (isUsableImageFile(image)) {
+        updateFormData.set("image", image);
+      }
+
+      setIsUpdating(true);
+      try {
+        const updatedNews = await requestJson<NewsItem>(
+          [`${NEWS_ENDPOINT}/${itemId}`],
+          { method: "PUT", body: updateFormData },
+          "Unable to update news."
+        );
+        setNews((currentNews) => currentNews.map((newsItem) => (newsItem._id === itemId ? updatedNews : newsItem)));
+        setFeedback({ severity: "success", message: "News updated successfully." });
+        setPendingEdit(null);
+        clearEditImageState();
+      } catch (error) {
+        setFeedback({ severity: "error", message: error instanceof Error ? error.message : "Unable to update news." });
+      } finally {
+        setIsUpdating(false);
+      }
+      return;
+    }
+
+    const imageFiles = formData.getAll("images").filter(isUsableImageFile).slice(0, MAX_EVENT_IMAGES);
+    updateFormData.set("description", description);
+    updateFormData.set("isActive", formData.get("isActive") === "on" ? "true" : "false");
+    imageFiles.forEach((image) => updateFormData.append("images", image));
+
+    setIsUpdating(true);
+    try {
+      const updatedEvent = await requestJson<UpcomingEvent>(
+        EVENT_ENDPOINTS.map((endpoint) => `${endpoint}/${itemId}`),
+        { method: "PUT", body: updateFormData },
+        "Unable to update upcoming event."
+      );
+      setEvents((currentEvents) =>
+        currentEvents.map((currentEvent) => ((currentEvent._id || currentEvent.id) === itemId ? updatedEvent : currentEvent))
+      );
+      setFeedback({ severity: "success", message: "Upcoming event updated successfully." });
+      setPendingEdit(null);
+      clearEditImageState();
+    } catch (error) {
+      setFeedback({
+        severity: "error",
+        message: error instanceof Error ? error.message : "Unable to update upcoming event.",
+      });
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   const handlePostSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -1760,7 +1926,10 @@ const AdminScreen: React.FC = () => {
                 <TextField
                   size="small"
                   value={postSearch}
-                  onChange={(event) => setPostSearch(event.target.value)}
+                  onChange={(event) => {
+                    setPostSearch(event.target.value);
+                    setPostPage(1);
+                  }}
                   placeholder="Search blogs"
                   sx={{ minWidth: { xs: "100%", md: 280 } }}
                   slotProps={{
@@ -1780,7 +1949,7 @@ const AdminScreen: React.FC = () => {
                     key={post._id || `${post.title}-${post.createdAt}`}
                     sx={{
                       display: "grid",
-                      gridTemplateColumns: { xs: "56px 1fr", sm: "56px 1fr auto auto" },
+                      gridTemplateColumns: { xs: "56px 1fr", sm: "56px 1fr auto auto auto" },
                       gap: 1.5,
                       alignItems: "center",
                       border: "1px solid #edf0f2",
@@ -1816,6 +1985,23 @@ const AdminScreen: React.FC = () => {
                     </Box>
                     <Chip size="small" label={post.type} sx={{ fontWeight: 800 }} />
                     <Button
+                      onClick={() => handleOpenEdit({ kind: "post", item: post })}
+                      startIcon={<Edit />}
+                      size="small"
+                      sx={{
+                        gridColumn: { xs: "1 / -1", sm: "auto" },
+                        justifySelf: { xs: "stretch", sm: "end" },
+                        color: "#175cd3",
+                        border: "1px solid #b2ccff",
+                        bgcolor: "#fff",
+                        textTransform: "none",
+                        fontWeight: 900,
+                        "&:hover": { bgcolor: "#eff8ff", borderColor: "#84adff" },
+                      }}
+                    >
+                      Edit
+                    </Button>
+                    <Button
                       onClick={() => setPendingDelete({ kind: "post", item: post })}
                       disabled={deletingId === post._id}
                       startIcon={<Delete />}
@@ -1845,7 +2031,7 @@ const AdminScreen: React.FC = () => {
                 {filteredPosts.length > ADMIN_PAGE_SIZE && (
                   <Pagination
                     count={postPageCount}
-                    page={postPage}
+                    page={safePostPage}
                     onChange={(_, page) => setPostPage(page)}
                     sx={{ alignSelf: "center", pt: 1 }}
                   />
@@ -1872,7 +2058,10 @@ const AdminScreen: React.FC = () => {
                 <TextField
                   size="small"
                   value={newsSearch}
-                  onChange={(event) => setNewsSearch(event.target.value)}
+                  onChange={(event) => {
+                    setNewsSearch(event.target.value);
+                    setNewsPage(1);
+                  }}
                   placeholder="Search news"
                   sx={{ minWidth: { xs: "100%", md: 280 } }}
                   slotProps={{
@@ -1892,7 +2081,7 @@ const AdminScreen: React.FC = () => {
                     key={newsItem._id || `${newsItem.title}-${newsItem.createdAt}`}
                     sx={{
                       display: "grid",
-                      gridTemplateColumns: { xs: "64px 1fr", sm: "64px 1fr auto" },
+                      gridTemplateColumns: { xs: "64px 1fr", sm: "64px 1fr auto auto" },
                       gap: 1.5,
                       alignItems: "center",
                       border: "1px solid #edf0f2",
@@ -1927,6 +2116,23 @@ const AdminScreen: React.FC = () => {
                       </Typography>
                     </Box>
                     <Button
+                      onClick={() => handleOpenEdit({ kind: "news", item: newsItem })}
+                      startIcon={<Edit />}
+                      size="small"
+                      sx={{
+                        gridColumn: { xs: "1 / -1", sm: "auto" },
+                        justifySelf: { xs: "stretch", sm: "end" },
+                        color: "#175cd3",
+                        border: "1px solid #b2ccff",
+                        bgcolor: "#fff",
+                        textTransform: "none",
+                        fontWeight: 900,
+                        "&:hover": { bgcolor: "#eff8ff", borderColor: "#84adff" },
+                      }}
+                    >
+                      Edit
+                    </Button>
+                    <Button
                       onClick={() => setPendingDelete({ kind: "news", item: newsItem })}
                       disabled={deletingId === newsItem._id}
                       startIcon={<Delete />}
@@ -1956,7 +2162,7 @@ const AdminScreen: React.FC = () => {
                 {filteredNews.length > ADMIN_PAGE_SIZE && (
                   <Pagination
                     count={newsPageCount}
-                    page={newsPage}
+                    page={safeNewsPage}
                     onChange={(_, page) => setNewsPage(page)}
                     sx={{ alignSelf: "center", pt: 1 }}
                   />
@@ -1983,7 +2189,10 @@ const AdminScreen: React.FC = () => {
                 <TextField
                   size="small"
                   value={eventSearch}
-                  onChange={(changeEvent) => setEventSearch(changeEvent.target.value)}
+                  onChange={(changeEvent) => {
+                    setEventSearch(changeEvent.target.value);
+                    setEventPage(1);
+                  }}
                   placeholder="Search events"
                   sx={{ minWidth: { xs: "100%", md: 280 } }}
                   slotProps={{
@@ -2007,7 +2216,7 @@ const AdminScreen: React.FC = () => {
                       key={eventId || `${event.title}-${event.createdAt}`}
                       sx={{
                         display: "grid",
-                        gridTemplateColumns: { xs: "88px minmax(0, 1fr) 44px", md: "112px minmax(0, 1fr) auto auto 44px" },
+                        gridTemplateColumns: { xs: "88px minmax(0, 1fr) 44px 44px", md: "112px minmax(0, 1fr) auto auto 44px 44px" },
                         alignItems: "center",
                         gap: { xs: 1.25, md: 2 },
                         border: "1px solid #edf0f2",
@@ -2086,6 +2295,19 @@ const AdminScreen: React.FC = () => {
                         }}
                       />
                       <IconButton
+                        aria-label={`Edit ${event.title}`}
+                        onClick={() => handleOpenEdit({ kind: "event", item: event })}
+                        sx={{
+                          color: "#175cd3",
+                          border: "1px solid #b2ccff",
+                          borderRadius: 1.25,
+                          bgcolor: "#fff",
+                          "&:hover": { bgcolor: "#eff8ff", borderColor: "#84adff" },
+                        }}
+                      >
+                        <Edit fontSize="small" />
+                      </IconButton>
+                      <IconButton
                         aria-label={`Delete ${event.title}`}
                         onClick={() => setPendingDelete({ kind: "event", item: event })}
                         disabled={deletingId === eventId}
@@ -2112,7 +2334,7 @@ const AdminScreen: React.FC = () => {
                 {filteredEvents.length > ADMIN_PAGE_SIZE && (
                   <Pagination
                     count={eventPageCount}
-                    page={eventPage}
+                    page={safeEventPage}
                     onChange={(_, page) => setEventPage(page)}
                     sx={{ alignSelf: "center", pt: 1 }}
                   />
@@ -2282,6 +2504,147 @@ const AdminScreen: React.FC = () => {
           {feedback?.message}
         </Alert>
       </Snackbar>
+      <Dialog open={Boolean(pendingEdit)} onClose={handleCloseEdit} fullWidth maxWidth="sm">
+        <Box
+          component="form"
+          key={pendingEdit ? `${pendingEdit.kind}-${pendingEdit.kind === "event" ? pendingEdit.item._id || pendingEdit.item.id : pendingEdit.item._id}` : "edit"}
+          onSubmit={handleEditSubmit}
+        >
+          <DialogTitle sx={{ fontWeight: 900 }}>
+            Edit {pendingEdit?.kind === "post" ? "blog" : pendingEdit?.kind === "news" ? "news" : "upcoming event"}
+          </DialogTitle>
+          <DialogContent>
+            <Stack spacing={2.2} sx={{ pt: 1 }}>
+              <TextField
+                required
+                label="Title"
+                name="title"
+                fullWidth
+                defaultValue={pendingEdit?.item.title || ""}
+              />
+
+              {pendingEdit?.kind === "post" && (
+                <TextField select required label="Type" name="type" defaultValue={pendingEdit.item.type || "Magazine"} fullWidth>
+                  <MenuItem value="Magazine">Magazine</MenuItem>
+                  <MenuItem value="Book">Book</MenuItem>
+                </TextField>
+              )}
+
+              <TextField
+                required
+                multiline
+                minRows={4}
+                label="Description"
+                name={pendingEdit?.kind === "post" ? "desc" : "description"}
+                fullWidth
+                defaultValue={
+                  pendingEdit?.kind === "post"
+                    ? pendingEdit.item.desc
+                    : pendingEdit?.kind === "news"
+                      ? pendingEdit.item.description
+                      : pendingEdit?.item.description || ""
+                }
+              />
+
+              {pendingEdit?.kind === "event" && (
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      name="isActive"
+                      defaultChecked={pendingEdit.item.isActive}
+                      sx={{ color: "#caa64a", "&.Mui-checked": { color: "#caa64a" } }}
+                    />
+                  }
+                  label="Show this event as active"
+                />
+              )}
+
+              <Box>
+                <Button
+                  component="label"
+                  variant="outlined"
+                  startIcon={<CloudUpload />}
+                  sx={{
+                    borderColor: "#caa64a",
+                    color: "#6f5517",
+                    textTransform: "none",
+                    fontWeight: 900,
+                    "&:hover": { borderColor: "#caa64a", bgcolor: "#f7edd0" },
+                  }}
+                >
+                  {pendingEdit?.kind === "event" ? "Replace event images" : "Replace image"}
+                  <input
+                    hidden
+                    multiple={pendingEdit?.kind === "event"}
+                    type="file"
+                    name={pendingEdit?.kind === "event" ? "images" : "image"}
+                    accept="image/*"
+                    onChange={handleEditImagesChange}
+                  />
+                </Button>
+                <Typography sx={{ color: "#667085", fontSize: 13, mt: 1 }}>
+                  {selectedEditImageNames || "Leave empty to keep current image."}
+                </Typography>
+              </Box>
+
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: pendingEdit?.kind === "event" ? "repeat(3, minmax(0, 1fr))" : "minmax(0, 220px)",
+                  gap: 1,
+                }}
+              >
+                {(selectedEditImagePreviews.length
+                  ? selectedEditImagePreviews
+                  : pendingEdit?.kind === "event"
+                    ? pendingEdit.item.images || []
+                    : pendingEdit?.item.image
+                      ? [pendingEdit.item.image]
+                      : []
+                ).map((image, index) => (
+                  <Box
+                    key={`${image}-${index}`}
+                    component="img"
+                    src={image}
+                    alt=""
+                    sx={{
+                      width: "100%",
+                      aspectRatio: pendingEdit?.kind === "event" ? "1 / 1" : "4 / 3",
+                      objectFit: "cover",
+                      borderRadius: 1.25,
+                      border: "1px solid #edf0f2",
+                      bgcolor: "#f2f4f7",
+                    }}
+                  />
+                ))}
+              </Box>
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2.5 }}>
+            <Button
+              onClick={handleCloseEdit}
+              disabled={isUpdating}
+              sx={{ color: "#475467", textTransform: "none", fontWeight: 800 }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={isUpdating}
+              startIcon={<Save />}
+              sx={{
+                bgcolor: "#111318",
+                color: "#fff",
+                textTransform: "none",
+                fontWeight: 900,
+                "&:hover": { bgcolor: "#2a2f38" },
+              }}
+            >
+              {isUpdating ? "Saving..." : "Save changes"}
+            </Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
       <Dialog
         open={Boolean(pendingDelete)}
         onClose={() => setPendingDelete(null)}

@@ -91,10 +91,7 @@ const Pastedition: React.FC = () => {
   }, []);
 
   const maxIndex = useMemo(() => Math.max(images.length - visibleCount, 0), [images.length, visibleCount]);
-
-  useEffect(() => {
-    setCurrent((value) => Math.min(value, maxIndex));
-  }, [maxIndex]);
+  const safeCurrent = Math.min(current, maxIndex);
 
   const next = useCallback(() => {
     setCurrent((value) => (value >= maxIndex ? 0 : value + 1));
@@ -198,7 +195,7 @@ const Pastedition: React.FC = () => {
             sx={{
               display: "flex",
               height: "100%",
-              transform: `translateX(-${current * (100 / visibleCount)}%)`,
+              transform: `translateX(-${safeCurrent * (100 / visibleCount)}%)`,
               transition: "transform 0.65s ease",
             }}
           >
