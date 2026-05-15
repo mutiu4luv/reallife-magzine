@@ -8,11 +8,13 @@ import AboutSection from "./AboutSection"
 import InterviewSection from "./InterviewSection"
 import Footer from "./Footer"
 import Pastedition from "./Pastedition"
+import LatestUpdates from "./LatestUpdates"
 const Landingpage = () => {
   return (
     <div>
       <MarqueeBar />
       <Hero />
+      <LatestUpdates />
       <Pastedition />
       <Reallife /> 
       <BenefitSection /> 
