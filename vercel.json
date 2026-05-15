@@ -1,5 +1,20 @@
 {
     "rewrites": [
+      {
+        "source": "/blog/:id",
+        "has": [{ "type": "header", "key": "user-agent", "value": ".*([Bb]ot|facebookexternalhit|Facebot|[Ww]hats[Aa]pp|Slack|Discord|LinkedIn|Telegram|Pinterest|SkypeUriPreview|Twitterbot).*" }],
+        "destination": "/api/share?kind=post&id=:id"
+      },
+      {
+        "source": "/news/:id",
+        "has": [{ "type": "header", "key": "user-agent", "value": ".*([Bb]ot|facebookexternalhit|Facebot|[Ww]hats[Aa]pp|Slack|Discord|LinkedIn|Telegram|Pinterest|SkypeUriPreview|Twitterbot).*" }],
+        "destination": "/api/share?kind=news&id=:id"
+      },
+      {
+        "source": "/events/:id",
+        "has": [{ "type": "header", "key": "user-agent", "value": ".*([Bb]ot|facebookexternalhit|Facebot|[Ww]hats[Aa]pp|Slack|Discord|LinkedIn|Telegram|Pinterest|SkypeUriPreview|Twitterbot).*" }],
+        "destination": "/api/share?kind=event&id=:id"
+      },
       { "source": "/(.*)", "destination": "/" }
     ]
   }

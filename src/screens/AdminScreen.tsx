@@ -38,10 +38,12 @@ import {
   PhotoLibrary,
   Save,
   Search,
+  Share,
   ToggleOn,
 } from "@mui/icons-material";
 import { API_BASE_URL } from "../config/api";
 import { NEWS_ENDPOINT, PAST_EDITIONS_ENDPOINT } from "../services/contentApi";
+import { shareContent } from "../utils/share";
 
 const POST_ENDPOINT = `${API_BASE_URL}/api/posts`;
 const EVENT_ENDPOINTS = [`${API_BASE_URL}/api/upcoming-events`, `${API_BASE_URL}/api/events`];
@@ -482,6 +484,47 @@ const AdminScreen: React.FC = () => {
   const visibleNews = useMemo(() => paginateItems(filteredNews, safeNewsPage), [filteredNews, safeNewsPage]);
   const visibleEvents = useMemo(() => paginateItems(filteredEvents, safeEventPage), [safeEventPage, filteredEvents]);
   const currentView = viewCopy[activeView];
+
+  const handleShareAdminItem = async (item: PendingEdit) => {
+    if (!item) {
+      return;
+    }
+
+    const itemId = item.kind === "event" ? item.item._id || item.item.id : item.item._id;
+
+    if (!itemId) {
+      setFeedback({ severity: "error", message: "This item needs an id before it can be shared." });
+      return;
+    }
+
+    const sharePath =
+      item.kind === "event" ? `/events/${itemId}` : item.kind === "news" ? `/news/${itemId}` : `/blog/${itemId}`;
+    const shareText =
+      item.kind === "event"
+        ? item.item.description
+        : item.kind === "news"
+        ? item.item.description
+        : item.item.desc;
+
+    try {
+      const result = await shareContent({
+        title: item.item.title,
+        text: shareText,
+        path: sharePath,
+      });
+
+      setFeedback({
+        severity: "success",
+        message: result === "copied" ? "Share link copied to clipboard." : "Share sheet opened.",
+      });
+    } catch (shareError) {
+      if (shareError instanceof DOMException && shareError.name === "AbortError") {
+        return;
+      }
+
+      setFeedback({ severity: "error", message: "Unable to share this item." });
+    }
+  };
 
   const loadAdminData = useCallback(async () => {
     setIsLoading(true);
@@ -1949,7 +1992,7 @@ const AdminScreen: React.FC = () => {
                     key={post._id || `${post.title}-${post.createdAt}`}
                     sx={{
                       display: "grid",
-                      gridTemplateColumns: { xs: "56px 1fr", sm: "56px 1fr auto auto auto" },
+                      gridTemplateColumns: { xs: "56px 1fr", sm: "56px 1fr auto auto auto auto" },
                       gap: 1.5,
                       alignItems: "center",
                       border: "1px solid #edf0f2",
@@ -1984,6 +2027,23 @@ const AdminScreen: React.FC = () => {
                       </Typography>
                     </Box>
                     <Chip size="small" label={post.type} sx={{ fontWeight: 800 }} />
+                    <Button
+                      onClick={() => void handleShareAdminItem({ kind: "post", item: post })}
+                      startIcon={<Share />}
+                      size="small"
+                      sx={{
+                        gridColumn: { xs: "1 / -1", sm: "auto" },
+                        justifySelf: { xs: "stretch", sm: "end" },
+                        color: "#175cd3",
+                        border: "1px solid #b2ccff",
+                        bgcolor: "#fff",
+                        textTransform: "none",
+                        fontWeight: 900,
+                        "&:hover": { bgcolor: "#eff8ff", borderColor: "#84adff" },
+                      }}
+                    >
+                      Share
+                    </Button>
                     <Button
                       onClick={() => handleOpenEdit({ kind: "post", item: post })}
                       startIcon={<Edit />}
@@ -2081,7 +2141,7 @@ const AdminScreen: React.FC = () => {
                     key={newsItem._id || `${newsItem.title}-${newsItem.createdAt}`}
                     sx={{
                       display: "grid",
-                      gridTemplateColumns: { xs: "64px 1fr", sm: "64px 1fr auto auto" },
+                      gridTemplateColumns: { xs: "64px 1fr", sm: "64px 1fr auto auto auto" },
                       gap: 1.5,
                       alignItems: "center",
                       border: "1px solid #edf0f2",
@@ -2115,6 +2175,23 @@ const AdminScreen: React.FC = () => {
                         {newsItem.description}
                       </Typography>
                     </Box>
+                    <Button
+                      onClick={() => void handleShareAdminItem({ kind: "news", item: newsItem })}
+                      startIcon={<Share />}
+                      size="small"
+                      sx={{
+                        gridColumn: { xs: "1 / -1", sm: "auto" },
+                        justifySelf: { xs: "stretch", sm: "end" },
+                        color: "#175cd3",
+                        border: "1px solid #b2ccff",
+                        bgcolor: "#fff",
+                        textTransform: "none",
+                        fontWeight: 900,
+                        "&:hover": { bgcolor: "#eff8ff", borderColor: "#84adff" },
+                      }}
+                    >
+                      Share
+                    </Button>
                     <Button
                       onClick={() => handleOpenEdit({ kind: "news", item: newsItem })}
                       startIcon={<Edit />}
@@ -2216,7 +2293,7 @@ const AdminScreen: React.FC = () => {
                       key={eventId || `${event.title}-${event.createdAt}`}
                       sx={{
                         display: "grid",
-                        gridTemplateColumns: { xs: "88px minmax(0, 1fr) 44px 44px", md: "112px minmax(0, 1fr) auto auto 44px 44px" },
+                        gridTemplateColumns: { xs: "88px minmax(0, 1fr) 44px 44px 44px", md: "112px minmax(0, 1fr) auto auto 44px 44px 44px" },
                         alignItems: "center",
                         gap: { xs: 1.25, md: 2 },
                         border: "1px solid #edf0f2",
@@ -2294,6 +2371,19 @@ const AdminScreen: React.FC = () => {
                           color: event.isActive ? "#027a48" : "#667085",
                         }}
                       />
+                      <IconButton
+                        aria-label={`Share ${event.title}`}
+                        onClick={() => void handleShareAdminItem({ kind: "event", item: event })}
+                        sx={{
+                          color: "#175cd3",
+                          border: "1px solid #b2ccff",
+                          borderRadius: 1.25,
+                          bgcolor: "#fff",
+                          "&:hover": { bgcolor: "#eff8ff", borderColor: "#84adff" },
+                        }}
+                      >
+                        <Share fontSize="small" />
+                      </IconButton>
                       <IconButton
                         aria-label={`Edit ${event.title}`}
                         onClick={() => handleOpenEdit({ kind: "event", item: event })}

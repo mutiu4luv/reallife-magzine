@@ -17,6 +17,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import { motion } from "framer-motion";
 import Footer from "../components/Footer";
 import { API_BASE_URL } from "../config/api";
+import { toExcerpt } from "../utils/contentText";
 
 const gold = "#A67C1B";
 const POSTS_ENDPOINT = `${API_BASE_URL}/api/posts`;
@@ -445,8 +446,18 @@ RealityLife News          </Typography>
                     {post.title}
                   </Typography>
 
-                  <Typography sx={{ color: "#555", fontSize: 15, flex: 1 }}>
-                    {post.desc}
+                  <Typography
+                    sx={{
+                      color: "#555",
+                      fontSize: 15,
+                      flex: 1,
+                      display: "-webkit-box",
+                      WebkitBoxOrient: "vertical",
+                      WebkitLineClamp: 4,
+                      overflow: "hidden",
+                    }}
+                  >
+                    {toExcerpt(post.desc, 170)}
                   </Typography>
 
                   <Button

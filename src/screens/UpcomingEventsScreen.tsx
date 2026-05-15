@@ -18,6 +18,7 @@ import { motion } from "framer-motion";
 import Footer from "../components/Footer";
 import ContentLoader from "../components/ContentLoader";
 import { loadUpcomingEvents, type EventItem } from "../services/contentApi";
+import { toExcerpt } from "../utils/contentText";
 
 const gold = "#A67C1B";
 
@@ -401,8 +402,18 @@ const UpcomingEventsScreen: React.FC = () => {
                         {formatDate(eventItem.createdAt)}
                       </Typography>
 
-                      <Typography sx={{ color: "#555", fontSize: 15, flex: 1 }}>
-                        {eventItem.description || eventItem.desc}
+                      <Typography
+                        sx={{
+                          color: "#555",
+                          fontSize: 15,
+                          flex: 1,
+                          display: "-webkit-box",
+                          WebkitBoxOrient: "vertical",
+                          WebkitLineClamp: 4,
+                          overflow: "hidden",
+                        }}
+                      >
+                        {toExcerpt(eventItem.description || eventItem.desc || "", 170)}
                       </Typography>
 
                       <Button

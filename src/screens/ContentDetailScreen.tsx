@@ -14,15 +14,15 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import LocalDiningIcon from "@mui/icons-material/LocalDining";
 import PersonIcon from "@mui/icons-material/Person";
+import ShareIcon from "@mui/icons-material/Share";
 import TerrainIcon from "@mui/icons-material/Terrain";
 import Footer from "../components/Footer";
 import ContentLoader from "../components/ContentLoader";
+import { shareContent } from "../utils/share";
+import { stripHtml, toExcerpt } from "../utils/contentText";
 import {
-  loadNews,
   loadNewsById,
-  loadPosts,
   loadPostById,
-  loadUpcomingEvents,
   loadUpcomingEventById,
   type EventItem,
   type NewsItem,
@@ -61,16 +61,6 @@ type ContentDetailScreenProps = {
   kind: DetailKind;
 };
 
-type RelatedItem = {
-  id?: string;
-  title: string;
-  excerpt: string;
-  image: string;
-  label: string;
-  createdAt?: string;
-  path: string;
-};
-
 const formatDate = (value?: string) => {
   if (!value) {
     return "Published";
@@ -81,20 +71,6 @@ const formatDate = (value?: string) => {
     day: "numeric",
     year: "numeric",
   }).format(new Date(value));
-};
-
-const stripHtml = (value: string) => {
-  if (!value) {
-    return "";
-  }
-
-  if (typeof window === "undefined") {
-    return value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-  }
-
-  const element = window.document.createElement("div");
-  element.innerHTML = value;
-  return (element.textContent || element.innerText || "").replace(/\s+/g, " ").trim();
 };
 
 const getReadingTime = (value: string) => {
@@ -204,65 +180,12 @@ const backPathByKind = (kind: DetailKind) => {
   return kind === "news" ? "/news" : "/blog";
 };
 
-const toRelatedItem = (kind: DetailKind, item: PostItem | NewsItem | EventItem): RelatedItem => {
-  if (kind === "event") {
-    const event = item as EventItem;
-    const itemId = getItemId(event);
-
-    return {
-      id: itemId,
-      title: event.title,
-      excerpt: stripHtml(event.description || event.desc || ""),
-      image: event.images[0] || "",
-      label: "Event",
-      createdAt: event.createdAt,
-      path: getRelatedPath(kind, itemId),
-    };
-  }
-
-  if (kind === "news") {
-    const news = item as NewsItem;
-    const itemId = getItemId(news);
-
-    return {
-      id: itemId,
-      title: news.title,
-      excerpt: stripHtml(news.description || news.desc || ""),
-      image: news.image,
-      label: "News",
-      createdAt: news.createdAt,
-      path: getRelatedPath(kind, itemId),
-    };
-  }
-
-  const post = item as PostItem;
-  const itemId = getItemId(post);
-
-  return {
-    id: itemId,
-    title: post.title,
-    excerpt: stripHtml(post.desc || post.description || ""),
-    image: post.image || post.images?.[0] || "",
-    label: post.type || "Article",
-    createdAt: post.createdAt,
-    path: getRelatedPath(kind, itemId),
-  };
-};
-
-const sortNewestFirst = <T extends { createdAt?: string }>(items: T[]) =>
-  [...items].sort((first, second) => {
-    const firstTime = first.createdAt ? new Date(first.createdAt).getTime() : 0;
-    const secondTime = second.createdAt ? new Date(second.createdAt).getTime() : 0;
-    return secondTime - firstTime;
-  });
-
 const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
   const { id } = useParams();
   const [item, setItem] = useState<DetailItem | null>(null);
-  const [relatedItems, setRelatedItems] = useState<RelatedItem[]>([]);
-  const [relatedLoading, setRelatedLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [shareMessage, setShareMessage] = useState("");
 
   const backPath = useMemo(() => backPathByKind(kind), [kind]);
 
@@ -305,45 +228,6 @@ const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
     };
   }, [id, kind]);
 
-  useEffect(() => {
-    let mounted = true;
-
-    const loadRelatedItems = async () => {
-      setRelatedLoading(true);
-
-      try {
-        const payload: Array<PostItem | NewsItem | EventItem> =
-          kind === "event" ? await loadUpcomingEvents() : kind === "news" ? await loadNews() : await loadPosts();
-
-        if (!mounted) {
-          return;
-        }
-
-        const currentId = id || item?.id;
-        const nextItems = sortNewestFirst(payload)
-          .filter((relatedItem) => getItemId(relatedItem) !== currentId)
-          .slice(0, 5)
-          .map((relatedItem) => toRelatedItem(kind, relatedItem));
-
-        setRelatedItems(nextItems);
-      } catch {
-        if (mounted) {
-          setRelatedItems([]);
-        }
-      } finally {
-        if (mounted) {
-          setRelatedLoading(false);
-        }
-      }
-    };
-
-    void loadRelatedItems();
-
-    return () => {
-      mounted = false;
-    };
-  }, [id, item?.id, kind]);
-
   const blocks = useMemo(() => parseBodyBlocks(item?.body || ""), [item?.body]);
   const storyText = useMemo(() => stripHtml(item?.body || ""), [item?.body]);
   const articleImages = useMemo(() => {
@@ -352,11 +236,34 @@ const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
   }, [blocks, item?.image, item?.images]);
 
   const heroImage = item?.image || articleImages[0] || "";
-  const excerpt = storyText || "Explore the full story, images, and editorial details from Reality Life Magazine.";
+  const excerpt =
+    toExcerpt(storyText, 180) || "Explore the full story, images, and editorial details from Reality Life Magazine.";
   const bodyHeading = kind === "event" ? "About this event" : kind === "news" ? "News story" : "Feature story";
   const contextLabel = kind === "event" ? "Experience" : kind === "news" ? "Newsroom" : "Lifestyle";
   const contentImageFit = kind === "event" ? "contain" : "cover";
   const contentImageBg = kind === "event" ? "#0f1712" : "#15130f";
+  const sharePath = id ? getRelatedPath(kind, id) : backPath;
+
+  const handleShare = async () => {
+    if (!item) {
+      return;
+    }
+
+    try {
+      const result = await shareContent({
+        title: item.title,
+        text: excerpt,
+        path: sharePath,
+      });
+      setShareMessage(result === "copied" ? "Link copied to clipboard." : "Share sheet opened.");
+    } catch (shareError) {
+      if (shareError instanceof DOMException && shareError.name === "AbortError") {
+        return;
+      }
+
+      setShareMessage("Unable to share this link.");
+    }
+  };
 
   return (
     <>
@@ -450,7 +357,7 @@ const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
                 }}
               >
                 <Box sx={{ pb: { xs: 0, md: 5 } }}>
-                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 2.5 }}>
+                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 2.5, alignItems: "center" }}>
                     <Chip
                       label={item.label}
                       sx={{ bgcolor: gold, color: "#fff", fontWeight: 900, borderRadius: 1.5 }}
@@ -465,6 +372,23 @@ const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
                         borderRadius: 1.5,
                       }}
                     />
+                    <Button
+                      onClick={handleShare}
+                      startIcon={<ShareIcon />}
+                      sx={{
+                        minHeight: 32,
+                        borderRadius: 1.5,
+                        bgcolor: "rgba(255,255,255,0.12)",
+                        color: ivory,
+                        border: "1px solid rgba(255,255,255,0.16)",
+                        px: 1.4,
+                        textTransform: "none",
+                        fontWeight: 900,
+                        "&:hover": { bgcolor: "#f1d68a", color: "#171410" },
+                      }}
+                    >
+                      Share
+                    </Button>
                   </Box>
 
                   <Typography
@@ -567,6 +491,27 @@ const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
                     </Box>
                   ))}
 
+                  <Button
+                    fullWidth
+                    onClick={handleShare}
+                    startIcon={<ShareIcon />}
+                    sx={{
+                      mt: 2.25,
+                      borderRadius: 1.5,
+                      bgcolor: "#f1d68a",
+                      color: "#171410",
+                      textTransform: "none",
+                      fontWeight: 900,
+                      "&:hover": { bgcolor: gold, color: "#fff" },
+                    }}
+                  >
+                    Share this {kind === "event" ? "event" : "story"}
+                  </Button>
+                  {shareMessage && (
+                    <Typography sx={{ color: "#c8b98f", fontSize: 12, fontWeight: 800, mt: 1.2 }}>
+                      {shareMessage}
+                    </Typography>
+                  )}
                 </Paper>
 
                 <Paper
@@ -691,162 +636,6 @@ const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
               </Box>
             )}
 
-            {(relatedLoading || relatedItems.length > 0) && (
-              <Box sx={{ mt: { xs: 5, md: 7 } }}>
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: { xs: "flex-start", sm: "end" },
-                    justifyContent: "space-between",
-                    gap: 2,
-                    mb: 2.5,
-                    flexDirection: { xs: "column", sm: "row" },
-                  }}
-                >
-                  <Box>
-                    <Typography
-                      sx={{ color: "#f1d68a", fontSize: 13, fontWeight: 900, textTransform: "uppercase", mb: 0.8 }}
-                    >
-                      Latest from this section
-                    </Typography>
-                    <Typography sx={{ color: ivory, fontSize: { xs: 26, md: 38 }, fontWeight: 950, lineHeight: 1.06 }}>
-                      Related Posts
-                    </Typography>
-                  </Box>
-
-                  <Button
-                    component={RouterLink}
-                    to={backPath}
-                    sx={{
-                      color: "#171410",
-                      bgcolor: "#f1d68a",
-                      borderRadius: 1.5,
-                      px: 2.4,
-                      py: 1,
-                      fontWeight: 900,
-                      textTransform: "none",
-                      "&:hover": { bgcolor: gold, color: "#fff" },
-                    }}
-                  >
-                    View all
-                  </Button>
-                </Box>
-
-                {relatedLoading && relatedItems.length === 0 ? (
-                  <Paper
-                    elevation={0}
-                    sx={{
-                      p: 3,
-                      borderRadius: 2,
-                      bgcolor: "#11110f",
-                      color: "#d7d0c4",
-                      border: "1px solid rgba(255,255,255,0.12)",
-                    }}
-                  >
-                    Loading related posts...
-                  </Paper>
-                ) : (
-                  <Box
-                    sx={{
-                      display: "grid",
-                      gridTemplateColumns: {
-                        xs: "1fr",
-                        sm: "repeat(2, minmax(0, 1fr))",
-                        lg: "repeat(5, minmax(0, 1fr))",
-                      },
-                      gap: 2,
-                    }}
-                  >
-                    {relatedItems.map((relatedItem) => (
-                      <Paper
-                        key={relatedItem.id || relatedItem.title}
-                        component={RouterLink}
-                        to={relatedItem.path}
-                        elevation={0}
-                        sx={{
-                          display: "flex",
-                          minWidth: 0,
-                          minHeight: 330,
-                          flexDirection: "column",
-                          overflow: "hidden",
-                          borderRadius: 2,
-                          bgcolor: "#f4efe4",
-                          color: "#171410",
-                          border: "1px solid rgba(166,124,27,0.24)",
-                          textDecoration: "none",
-                          transition: "transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease",
-                          "&:hover": {
-                            transform: "translateY(-6px)",
-                            borderColor: gold,
-                            boxShadow: "0 18px 36px rgba(0,0,0,0.28)",
-                          },
-                        }}
-                      >
-                        <Box
-                          sx={{
-                            position: "relative",
-                            bgcolor: "#171410",
-                            aspectRatio: "4 / 3",
-                            overflow: "hidden",
-                          }}
-                        >
-                          {relatedItem.image ? (
-                            <Box
-                              component="img"
-                              src={relatedItem.image}
-                              alt={relatedItem.title}
-                              sx={{
-                                width: "100%",
-                                height: "100%",
-                                objectFit: kind === "event" ? "contain" : "cover",
-                                display: "block",
-                              }}
-                            />
-                          ) : (
-                            <Box sx={{ width: "100%", height: "100%", bgcolor: deepGreen }} />
-                          )}
-                          <Chip
-                            label={relatedItem.label}
-                            size="small"
-                            sx={{
-                              position: "absolute",
-                              left: 12,
-                              top: 12,
-                              bgcolor: gold,
-                              color: "#fff",
-                              fontWeight: 900,
-                              borderRadius: 1.2,
-                            }}
-                          />
-                        </Box>
-
-                        <Box sx={{ p: 2, display: "flex", flexDirection: "column", flex: 1 }}>
-                          <Typography sx={{ color: deepGreen, fontSize: 12, fontWeight: 900, mb: 1 }}>
-                            {formatDate(relatedItem.createdAt)}
-                          </Typography>
-                          <Typography sx={{ fontSize: 18, lineHeight: 1.18, fontWeight: 950, mb: 1.2 }}>
-                            {relatedItem.title}
-                          </Typography>
-                          <Typography
-                            sx={{
-                              color: "#665f51",
-                              fontSize: 14,
-                              lineHeight: 1.6,
-                              display: "-webkit-box",
-                              WebkitBoxOrient: "vertical",
-                              WebkitLineClamp: 3,
-                              overflow: "hidden",
-                            }}
-                          >
-                            {relatedItem.excerpt}
-                          </Typography>
-                        </Box>
-                      </Paper>
-                    ))}
-                  </Box>
-                )}
-              </Box>
-            )}
           </Container>
         )}
       </Box>

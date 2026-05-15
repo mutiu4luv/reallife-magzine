@@ -17,6 +17,7 @@ import { motion } from "framer-motion";
 import Footer from "../components/Footer";
 import ContentLoader from "../components/ContentLoader";
 import { loadNews, type NewsItem } from "../services/contentApi";
+import { toExcerpt } from "../utils/contentText";
 
 const gold = "#A67C1B";
 
@@ -172,7 +173,19 @@ const NewsScreen: React.FC = () => {
                     <Box sx={{ p: 3, display: "flex", flexDirection: "column", flex: 1 }}>
                       <Chip label={formatDate(item.createdAt)} size="small" sx={{ alignSelf: "flex-start", mb: 1.5, bgcolor: gold, color: "#fff", fontWeight: 700 }} />
                       <Typography sx={{ fontWeight: 800, fontSize: 20, mb: 1 }}>{item.title}</Typography>
-                      <Typography sx={{ color: "#555", fontSize: 15, flex: 1 }}>{item.description}</Typography>
+                      <Typography
+                        sx={{
+                          color: "#555",
+                          fontSize: 15,
+                          flex: 1,
+                          display: "-webkit-box",
+                          WebkitBoxOrient: "vertical",
+                          WebkitLineClamp: 4,
+                          overflow: "hidden",
+                        }}
+                      >
+                        {toExcerpt(item.description, 170)}
+                      </Typography>
                       <Button component={RouterLink} to={`/news/${itemId}`} disabled={!itemId} sx={{ mt: 2, alignSelf: "flex-start", color: gold, fontWeight: 700, textTransform: "none", border: `1px solid ${gold}`, "&:hover": { bgcolor: gold, color: "#fff" } }}>
                         Read Article →
                       </Button>

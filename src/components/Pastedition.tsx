@@ -164,7 +164,7 @@ const Pastedition: React.FC = () => {
             },
           }}
         >
-          Our Past Editions
+          Our Past Editions Cover
         </Typography>
 
         <Typography
