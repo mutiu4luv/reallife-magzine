@@ -16,8 +16,26 @@ const getShareUrl = (path: string) => {
   return new URL(path, window.location.origin).toString();
 };
 
+const getPreviewSharePath = (path: string) => {
+  const match = path.match(/^\/(blog|news|events)\/([^/?#]+)/);
+
+  if (!match) {
+    return path;
+  }
+
+  const kindBySection: Record<string, string> = {
+    blog: "post",
+    news: "news",
+    events: "event",
+  };
+
+  const kind = kindBySection[match[1]];
+  const id = decodeURIComponent(match[2]);
+  return `/api/share?kind=${encodeURIComponent(kind)}&id=${encodeURIComponent(id)}`;
+};
+
 export const shareContent = async ({ title, text, path }: ShareContent) => {
-  const url = getShareUrl(path);
+  const url = getShareUrl(getPreviewSharePath(path));
 
   if (navigator.share) {
     await navigator.share({ title, text, url });

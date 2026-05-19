@@ -21,8 +21,11 @@ import ContentLoader from "../components/ContentLoader";
 import { shareContent } from "../utils/share";
 import { stripHtml, toExcerpt } from "../utils/contentText";
 import {
+  loadNews,
   loadNewsById,
+  loadPosts,
   loadPostById,
+  loadUpcomingEvents,
   loadUpcomingEventById,
   type EventItem,
   type NewsItem,
@@ -44,6 +47,15 @@ type DetailItem = {
   images?: string[];
   label: string;
   createdAt?: string;
+};
+
+type RelatedItem = {
+  id?: string;
+  title: string;
+  excerpt: string;
+  image: string;
+  label: string;
+  path: string;
 };
 
 type ContentBlock =
@@ -142,7 +154,8 @@ const toDetailItem = (kind: DetailKind, item: PostItem | NewsItem | EventItem): 
       id: getItemId(news),
       title: news.title,
       body: news.description || news.desc || "",
-      image: news.image,
+      image: news.image || news.images?.[0] || "",
+      images: news.images || (news.image ? [news.image] : []),
       label: "News",
       createdAt: news.createdAt,
     };
@@ -172,6 +185,23 @@ const getRelatedPath = (kind: DetailKind, id?: string) => {
   return kind === "news" ? `/news/${id}` : `/blog/${id}`;
 };
 
+const toRelatedItem = (kind: DetailKind, item: PostItem | NewsItem | EventItem): RelatedItem | null => {
+  const detail = toDetailItem(kind, item);
+
+  if (!detail.id) {
+    return null;
+  }
+
+  return {
+    id: detail.id,
+    title: detail.title,
+    excerpt: toExcerpt(stripHtml(detail.body), 96),
+    image: detail.image || detail.images?.[0] || "",
+    label: detail.label,
+    path: getRelatedPath(kind, detail.id),
+  };
+};
+
 const backPathByKind = (kind: DetailKind) => {
   if (kind === "event") {
     return "/events";
@@ -186,6 +216,7 @@ const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [shareMessage, setShareMessage] = useState("");
+  const [relatedItems, setRelatedItems] = useState<RelatedItem[]>([]);
 
   const backPath = useMemo(() => backPathByKind(kind), [kind]);
 
@@ -204,11 +235,30 @@ const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
           kind === "event"
             ? await loadUpcomingEventById(id)
             : kind === "news"
-            ? await loadNewsById(id)
-            : await loadPostById(id);
+              ? await loadNewsById(id)
+              : await loadPostById(id);
 
         if (mounted) {
           setItem(toDetailItem(kind, payload));
+        }
+
+        try {
+          const relatedPayload = kind === "event" ? await loadUpcomingEvents() : kind === "news" ? await loadNews() : await loadPosts();
+          if (!mounted) {
+            return;
+          }
+
+          setRelatedItems(
+            relatedPayload
+              .map((relatedItem) => toRelatedItem(kind, relatedItem))
+              .filter((relatedItem): relatedItem is RelatedItem => relatedItem !== null)
+              .filter((relatedItem) => relatedItem.id !== id)
+              .slice(0, 3)
+          );
+        } catch {
+          if (mounted) {
+            setRelatedItems([]);
+          }
         }
       } catch (err) {
         if (mounted) {
@@ -234,6 +284,34 @@ const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
     const inlineImages = blocks.filter((block) => block.type === "image").map((block) => block.src);
     return uniqueImages([item?.image || "", ...(item?.images || []), ...inlineImages]);
   }, [blocks, item?.image, item?.images]);
+  const storyBlocks = useMemo(() => {
+    const inlineImages = blocks.filter((block) => block.type === "image").map((block) => block.src);
+    const extraImages = uniqueImages(item?.images || []).filter(
+      (image) => image !== item?.image && !inlineImages.includes(image)
+    );
+
+    if (!extraImages.length) {
+      return blocks;
+    }
+
+    let nextImageIndex = 0;
+    const mixedBlocks: ContentBlock[] = [];
+
+    blocks.forEach((block) => {
+      mixedBlocks.push(block);
+
+      if (block.type === "paragraph" && nextImageIndex < extraImages.length) {
+        mixedBlocks.push({ type: "image", src: extraImages[nextImageIndex], alt: item?.title || "" });
+        nextImageIndex += 1;
+      }
+    });
+
+    extraImages.slice(nextImageIndex).forEach((image) => {
+      mixedBlocks.push({ type: "image", src: image, alt: item?.title || "" });
+    });
+
+    return mixedBlocks;
+  }, [blocks, item?.image, item?.images, item?.title]);
 
   const heroImage = item?.image || articleImages[0] || "";
   const excerpt =
@@ -529,7 +607,7 @@ const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
                     <LocalDiningIcon />
                   </Box>
                   <Typography sx={{ fontWeight: 950, fontSize: 20, lineHeight: 1.12 }}>
-                    Culture, hospitality, and place in one polished read.
+                   Lifestyle, Culture, hospitality, and place in one polished read.
                   </Typography>
                 </Paper>
               </Box>
@@ -553,7 +631,7 @@ const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
                 </Typography>
 
                 <Box sx={{ display: "grid", gap: { xs: 2.25, md: 3 } }}>
-                  {blocks.map((block, index) =>
+                  {storyBlocks.map((block, index) =>
                     block.type === "image" ? (
                       <Paper
                         key={`${block.src}-${index}`}
@@ -595,41 +673,65 @@ const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
               </Paper>
             </Box>
 
-            {articleImages.length > 1 && (
-              <Box sx={{ mt: { xs: 4, md: 6 } }}>
-                <Typography sx={{ color: ivory, fontSize: { xs: 24, md: 34 }, fontWeight: 950, mb: 2 }}>
-                  More from this story
+            {relatedItems.length > 0 && (
+              <Box sx={{ mt: { xs: 5, md: 7 } }}>
+                <Typography sx={{ color: ivory, fontSize: { xs: 24, md: 34 }, fontWeight: 950, mb: 2.5 }}>
+                  Related {kind === "event" ? "events" : kind === "news" ? "news" : "articles"}
                 </Typography>
                 <Box
                   sx={{
                     display: "grid",
                     gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", md: "repeat(3, minmax(0, 1fr))" },
-                    gap: 2,
+                    gap: 2.2,
                   }}
                 >
-                  {articleImages.slice(1).map((image, index) => (
+                  {relatedItems.map((relatedItem) => (
                     <Paper
-                      key={`${image}-${index}`}
+                      key={relatedItem.id}
+                      component={RouterLink}
+                      to={relatedItem.path}
                       elevation={0}
                       sx={{
                         overflow: "hidden",
                         borderRadius: 2,
-                        bgcolor: "#111",
+                        bgcolor: "#11110f",
                         border: "1px solid rgba(255,255,255,0.12)",
+                        color: ivory,
+                        textDecoration: "none",
+                        transition: "transform 180ms ease, border-color 180ms ease",
+                        "&:hover": {
+                          transform: "translateY(-3px)",
+                          borderColor: "rgba(241,214,138,0.44)",
+                        },
                       }}
                     >
-                      <Box
-                        component="img"
-                        src={image}
-                        alt={`${item.title} ${index + 2}`}
-                        sx={{
-                          width: "100%",
-                          aspectRatio: "4 / 3",
-                          objectFit: contentImageFit,
-                          bgcolor: contentImageBg,
-                          display: "block",
-                        }}
-                      />
+                      {relatedItem.image && (
+                        <Box
+                          component="img"
+                          src={relatedItem.image}
+                          alt={relatedItem.title}
+                          sx={{
+                            width: "100%",
+                            aspectRatio: "4 / 3",
+                            objectFit: "cover",
+                            bgcolor: contentImageBg,
+                            display: "block",
+                          }}
+                        />
+                      )}
+                      <Box sx={{ p: 2.2 }}>
+                        <Chip
+                          size="small"
+                          label={relatedItem.label}
+                          sx={{ bgcolor: "rgba(241,214,138,0.14)", color: "#f1d68a", fontWeight: 900, mb: 1.4 }}
+                        />
+                        <Typography sx={{ fontSize: 18, lineHeight: 1.2, fontWeight: 950, mb: 1 }}>
+                          {relatedItem.title}
+                        </Typography>
+                        <Typography sx={{ color: "#c8b98f", lineHeight: 1.65, fontSize: 14 }}>
+                          {relatedItem.excerpt}
+                        </Typography>
+                      </Box>
                     </Paper>
                   ))}
                 </Box>

@@ -87,6 +87,7 @@ type NewsItem = {
   title: string;
   description: string;
   image: string;
+  images?: string[];
   createdAt?: string;
 };
 
@@ -440,8 +441,8 @@ const AdminScreen: React.FC = () => {
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [selectedBlogImageNames, setSelectedBlogImageNames] = useState("");
   const [selectedPastEditionImageNames, setSelectedPastEditionImageNames] = useState("");
-  const [selectedNewsImageName, setSelectedNewsImageName] = useState("");
-  const [selectedNewsImagePreview, setSelectedNewsImagePreview] = useState("");
+  const [selectedNewsImageNames, setSelectedNewsImageNames] = useState("");
+  const [selectedNewsImagePreviews, setSelectedNewsImagePreviews] = useState<string[]>([]);
   const [selectedEventImages, setSelectedEventImages] = useState<File[]>([]);
   const [selectedEventImageNames, setSelectedEventImageNames] = useState("");
   const [selectedEventImageCount, setSelectedEventImageCount] = useState(0);
@@ -572,11 +573,9 @@ const AdminScreen: React.FC = () => {
 
   useEffect(() => {
     return () => {
-      if (selectedNewsImagePreview) {
-        URL.revokeObjectURL(selectedNewsImagePreview);
-      }
+      selectedNewsImagePreviews.forEach((preview) => URL.revokeObjectURL(preview));
     };
-  }, [selectedNewsImagePreview]);
+  }, [selectedNewsImagePreviews]);
 
   useEffect(() => {
     return () => {
@@ -591,36 +590,50 @@ const AdminScreen: React.FC = () => {
   }, [selectedEditImagePreviews]);
 
   const handleNewsImageChange = (changeEvent: React.ChangeEvent<HTMLInputElement>) => {
-    const file = changeEvent.target.files?.[0];
+    const files = Array.from(changeEvent.target.files || []);
 
-    if (selectedNewsImagePreview) {
-      URL.revokeObjectURL(selectedNewsImagePreview);
-    }
+    selectedNewsImagePreviews.forEach((preview) => URL.revokeObjectURL(preview));
 
-    if (!file) {
-      setSelectedNewsImageName("");
-      setSelectedNewsImagePreview("");
+    if (!files.length) {
+      setSelectedNewsImageNames("");
+      setSelectedNewsImagePreviews([]);
       return;
     }
 
-    if (!file.type.startsWith("image/")) {
+    const allImageFiles = files.filter((file) => file.type.startsWith("image/"));
+    const imageFiles = allImageFiles.slice(0, MAX_EVENT_IMAGES);
+
+    if (allImageFiles.length !== files.length) {
       changeEvent.target.value = "";
-      setSelectedNewsImageName("");
-      setSelectedNewsImagePreview("");
-      setFeedback({ severity: "error", message: "Please choose an image file." });
+      setSelectedNewsImageNames("");
+      setSelectedNewsImagePreviews([]);
+      setFeedback({ severity: "error", message: "Please choose image files only." });
       return;
     }
 
-    if (file.size > MAX_IMAGE_SIZE_BYTES) {
+    const largeImageNames = getLargeImageNames(imageFiles);
+    if (largeImageNames.length > 0) {
       changeEvent.target.value = "";
-      setSelectedNewsImageName("");
-      setSelectedNewsImagePreview("");
-      setFeedback({ severity: "error", message: buildLargeImageMessage([file.name]) });
+      setSelectedNewsImageNames("");
+      setSelectedNewsImagePreviews([]);
+      setFeedback({ severity: "error", message: buildLargeImageMessage(largeImageNames) });
       return;
     }
 
-    setSelectedNewsImageName(file.name);
-    setSelectedNewsImagePreview(URL.createObjectURL(file));
+    if (getTotalFileSize(imageFiles) > MAX_EVENT_TOTAL_UPLOAD_BYTES) {
+      changeEvent.target.value = "";
+      setSelectedNewsImageNames("");
+      setSelectedNewsImagePreviews([]);
+      setFeedback({ severity: "error", message: buildTotalUploadTooLargeMessage() });
+      return;
+    }
+
+    if (allImageFiles.length > MAX_EVENT_IMAGES) {
+      setFeedback({ severity: "error", message: `Only ${MAX_EVENT_IMAGES} news images can be uploaded.` });
+    }
+
+    setSelectedNewsImageNames(imageFiles.map((file) => file.name).join(", "));
+    setSelectedNewsImagePreviews(imageFiles.map((file) => URL.createObjectURL(file)));
   };
 
   const updateEventImageState = (images: File[]) => {
@@ -736,7 +749,7 @@ const AdminScreen: React.FC = () => {
       return;
     }
 
-    const uploadableImages = pendingEdit?.kind === "event" ? imageFiles.slice(0, MAX_EVENT_IMAGES) : imageFiles.slice(0, 1);
+    const uploadableImages = imageFiles.slice(0, MAX_EVENT_IMAGES);
     const largeImageNames = getLargeImageNames(uploadableImages);
 
     if (largeImageNames.length > 0) {
@@ -745,14 +758,14 @@ const AdminScreen: React.FC = () => {
       return;
     }
 
-    if (pendingEdit?.kind === "event" && getTotalFileSize(uploadableImages) > MAX_EVENT_TOTAL_UPLOAD_BYTES) {
+    if (getTotalFileSize(uploadableImages) > MAX_EVENT_TOTAL_UPLOAD_BYTES) {
       changeEvent.target.value = "";
       setFeedback({ severity: "error", message: buildTotalUploadTooLargeMessage() });
       return;
     }
 
-    if (pendingEdit?.kind === "event" && imageFiles.length > MAX_EVENT_IMAGES) {
-      setFeedback({ severity: "error", message: `Only ${MAX_EVENT_IMAGES} event images can be uploaded.` });
+    if (imageFiles.length > MAX_EVENT_IMAGES) {
+      setFeedback({ severity: "error", message: `Only ${MAX_EVENT_IMAGES} images can be uploaded.` });
     }
 
     setSelectedEditImageNames(uploadableImages.map((file) => file.name).join(", "));
@@ -787,14 +800,12 @@ const AdminScreen: React.FC = () => {
 
     if (pendingEdit.kind === "post") {
       const type = String(formData.get("type") || "Magazine") as PostType;
-      const image = formData.get("image");
+      const imageFiles = formData.getAll("images").filter(isUsableImageFile).slice(0, MAX_EVENT_IMAGES);
 
       updateFormData.set("desc", description);
       updateFormData.set("type", type);
 
-      if (isUsableImageFile(image)) {
-        updateFormData.set("image", image);
-      }
+      imageFiles.forEach((image) => updateFormData.append("images", image));
 
       setIsUpdating(true);
       try {
@@ -816,12 +827,10 @@ const AdminScreen: React.FC = () => {
     }
 
     if (pendingEdit.kind === "news") {
-      const image = formData.get("image");
+      const imageFiles = formData.getAll("images").filter(isUsableImageFile).slice(0, MAX_EVENT_IMAGES);
       updateFormData.set("description", description);
 
-      if (isUsableImageFile(image)) {
-        updateFormData.set("image", image);
-      }
+      imageFiles.forEach((image) => updateFormData.append("images", image));
 
       setIsUpdating(true);
       try {
@@ -890,12 +899,19 @@ const AdminScreen: React.FC = () => {
       return;
     }
 
+    if (getTotalFileSize(imageFiles.slice(0, MAX_EVENT_IMAGES)) > MAX_EVENT_TOTAL_UPLOAD_BYTES) {
+      setFeedback({ severity: "error", message: buildTotalUploadTooLargeMessage() });
+      return;
+    }
+
     const buildBlogFormData = () => {
       const blogFormData = new FormData();
       blogFormData.set("title", title);
       blogFormData.set("desc", desc);
       blogFormData.set("type", type);
-      blogFormData.set("image", imageFiles[0]);
+      imageFiles.slice(0, MAX_EVENT_IMAGES).forEach((image) => {
+        blogFormData.append("images", image);
+      });
 
       return blogFormData;
     };
@@ -929,22 +945,33 @@ const AdminScreen: React.FC = () => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
 
-    const image = formData.get("image");
+    const imageFiles = formData.getAll("images").filter(isUsableImageFile);
     const title = String(formData.get("title") || "").trim();
     const description = String(formData.get("description") || "").trim();
 
-    if (!title || !description || !isUsableImageFile(image)) {
-      setFeedback({ severity: "error", message: "News title, description, and image are required." });
+    if (!title || !description || imageFiles.length === 0) {
+      setFeedback({ severity: "error", message: "News title, description, and at least one image are required." });
       return;
     }
 
-    if (image.size > MAX_IMAGE_SIZE_BYTES) {
-      setFeedback({ severity: "error", message: buildLargeImageMessage([image.name]) });
+    const uploadableNewsImages = imageFiles.slice(0, MAX_EVENT_IMAGES);
+    const largeImageNames = getLargeImageNames(uploadableNewsImages);
+    if (largeImageNames.length > 0) {
+      setFeedback({ severity: "error", message: buildLargeImageMessage(largeImageNames) });
       return;
     }
 
-    formData.set("title", title);
-    formData.set("description", description);
+    if (getTotalFileSize(uploadableNewsImages) > MAX_EVENT_TOTAL_UPLOAD_BYTES) {
+      setFeedback({ severity: "error", message: buildTotalUploadTooLargeMessage() });
+      return;
+    }
+
+    const newsFormData = new FormData();
+    newsFormData.set("title", title);
+    newsFormData.set("description", description);
+    uploadableNewsImages.forEach((image) => {
+      newsFormData.append("images", image);
+    });
 
     setIsSavingNews(true);
     try {
@@ -952,15 +979,16 @@ const AdminScreen: React.FC = () => {
         [NEWS_ENDPOINT],
         {
           method: "POST",
-          body: formData,
+          body: newsFormData,
         },
         "Unable to publish news."
       );
 
       setNews((currentNews) => [createdNews, ...currentNews]);
       newsFormRef.current?.reset();
-      setSelectedNewsImageName("");
-      setSelectedNewsImagePreview("");
+      selectedNewsImagePreviews.forEach((preview) => URL.revokeObjectURL(preview));
+      setSelectedNewsImageNames("");
+      setSelectedNewsImagePreviews([]);
       setFeedback({ severity: "success", message: "News published successfully." });
     } catch (error) {
       setFeedback({
@@ -1466,7 +1494,7 @@ const AdminScreen: React.FC = () => {
                       "&:hover": { borderColor: "#caa64a", bgcolor: "#f7edd0" },
                     }}
                   >
-                    Select blog image
+                    Select blog images
                     <input
                       hidden
                       required
@@ -1485,11 +1513,9 @@ const AdminScreen: React.FC = () => {
                   <Typography sx={{ color: "#667085", fontSize: 13, mt: 1 }}>
                     {selectedBlogImageNames || "No image selected"}
                   </Typography>
-                  {selectedBlogImageNames.includes(",") && (
-                    <Typography sx={{ color: "#b45309", fontSize: 13, mt: 0.5 }}>
-                      The current backend accepts one blog image, so only the first selected image will be uploaded.
-                    </Typography>
-                  )}
+                  <Typography sx={{ color: "#667085", fontSize: 13, mt: 0.5 }}>
+                    Choose up to {MAX_EVENT_IMAGES} images. Each image must be {MAX_IMAGE_SIZE_LABEL} or smaller.
+                  </Typography>
                 </Box>
 
                 <Button
@@ -1559,19 +1585,43 @@ const AdminScreen: React.FC = () => {
                   <input
                     hidden
                     required
+                    multiple
                     type="file"
-                    name="image"
+                    name="images"
                     accept="image/*"
                     onChange={handleNewsImageChange}
                   />
-                  {selectedNewsImagePreview ? (
+                  {selectedNewsImagePreviews.length > 0 ? (
                     <>
                       <Box
-                        component="img"
-                        src={selectedNewsImagePreview}
-                        alt="Selected news"
-                        sx={{ width: "100%", height: "100%", minHeight: { xs: 220, sm: 260 }, objectFit: "cover" }}
-                      />
+                        sx={{
+                          width: "100%",
+                          minHeight: { xs: 220, sm: 260 },
+                          display: "grid",
+                          gridTemplateColumns: {
+                            xs: "repeat(2, minmax(0, 1fr))",
+                            sm: "repeat(3, minmax(0, 1fr))",
+                          },
+                          gap: 1,
+                          p: 1,
+                        }}
+                      >
+                        {selectedNewsImagePreviews.map((preview, index) => (
+                          <Box
+                            key={preview}
+                            component="img"
+                            src={preview}
+                            alt={`Selected news ${index + 1}`}
+                            sx={{
+                              width: "100%",
+                              aspectRatio: index === 0 ? { xs: "2 / 1", sm: "2 / 1" } : "1 / 1",
+                              gridColumn: index === 0 ? { xs: "span 2", sm: "span 2" } : "span 1",
+                              objectFit: "cover",
+                              borderRadius: 1.5,
+                            }}
+                          />
+                        ))}
+                      </Box>
                       <Box
                         sx={{
                           position: "absolute",
@@ -1590,7 +1640,7 @@ const AdminScreen: React.FC = () => {
                         }}
                       >
                         <Typography sx={{ fontSize: 13, fontWeight: 800, minWidth: 0 }} noWrap>
-                          {selectedNewsImageName}
+                          {selectedNewsImageNames}
                         </Typography>
                         <Button
                           component="span"
@@ -1622,7 +1672,7 @@ const AdminScreen: React.FC = () => {
                           Upload news image
                         </Typography>
                         <Typography sx={{ color: "#667085", fontSize: 13, mt: 0.5 }}>
-                          Click here and choose an image from your device. Max {MAX_IMAGE_SIZE_LABEL}.
+                          Choose up to {MAX_EVENT_IMAGES} images. Each image must be {MAX_IMAGE_SIZE_LABEL} or smaller.
                         </Typography>
                       </Box>
                     </Stack>
@@ -2662,25 +2712,25 @@ const AdminScreen: React.FC = () => {
                     "&:hover": { borderColor: "#caa64a", bgcolor: "#f7edd0" },
                   }}
                 >
-                  {pendingEdit?.kind === "event" ? "Replace event images" : "Replace image"}
+                  {pendingEdit?.kind === "event" ? "Replace event images" : "Replace images"}
                   <input
                     hidden
-                    multiple={pendingEdit?.kind === "event"}
+                    multiple
                     type="file"
-                    name={pendingEdit?.kind === "event" ? "images" : "image"}
+                    name="images"
                     accept="image/*"
                     onChange={handleEditImagesChange}
                   />
                 </Button>
                 <Typography sx={{ color: "#667085", fontSize: 13, mt: 1 }}>
-                  {selectedEditImageNames || "Leave empty to keep current image."}
+                  {selectedEditImageNames || "Leave empty to keep current images."}
                 </Typography>
               </Box>
 
               <Box
                 sx={{
                   display: "grid",
-                  gridTemplateColumns: pendingEdit?.kind === "event" ? "repeat(3, minmax(0, 1fr))" : "minmax(0, 220px)",
+                  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
                   gap: 1,
                 }}
               >
@@ -2688,9 +2738,11 @@ const AdminScreen: React.FC = () => {
                   ? selectedEditImagePreviews
                   : pendingEdit?.kind === "event"
                     ? pendingEdit.item.images || []
-                    : pendingEdit?.item.image
-                      ? [pendingEdit.item.image]
-                      : []
+                    : pendingEdit?.kind === "post"
+                      ? pendingEdit.item.images || (pendingEdit.item.image ? [pendingEdit.item.image] : [])
+                      : pendingEdit?.kind === "news"
+                        ? pendingEdit.item.images || (pendingEdit.item.image ? [pendingEdit.item.image] : [])
+                        : []
                 ).map((image, index) => (
                   <Box
                     key={`${image}-${index}`}
@@ -2699,7 +2751,7 @@ const AdminScreen: React.FC = () => {
                     alt=""
                     sx={{
                       width: "100%",
-                      aspectRatio: pendingEdit?.kind === "event" ? "1 / 1" : "4 / 3",
+                      aspectRatio: "1 / 1",
                       objectFit: "cover",
                       borderRadius: 1.25,
                       border: "1px solid #edf0f2",

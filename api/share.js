@@ -94,6 +94,7 @@ export default async function handler(req, res) {
   const path =
     kind === "event" ? `/events/${encodeURIComponent(id)}` : kind === "news" ? `/news/${encodeURIComponent(id)}` : `/blog/${encodeURIComponent(id)}`;
   const pageUrl = `${origin}${path}`;
+  const previewUrl = `${origin}/api/share?kind=${encodeURIComponent(kind)}&id=${encodeURIComponent(id)}`;
 
   try {
     if (!id || !endpointsByKind[kind]) {
@@ -120,15 +121,22 @@ export default async function handler(req, res) {
     <meta property="og:site_name" content="Reality Life Magazine">
     <meta property="og:title" content="${escapeHtml(title)}">
     <meta property="og:description" content="${escapeHtml(description)}">
-    <meta property="og:url" content="${escapeHtml(pageUrl)}">
+    <meta property="og:url" content="${escapeHtml(previewUrl)}">
     <meta property="og:image" content="${escapeHtml(image)}">
     <meta property="og:image:secure_url" content="${escapeHtml(image)}">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
     <meta property="og:image:alt" content="${escapeHtml(title)}">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="${escapeHtml(title)}">
     <meta name="twitter:description" content="${escapeHtml(description)}">
     <meta name="twitter:image" content="${escapeHtml(image)}">
     <link rel="canonical" href="${escapeHtml(pageUrl)}">
+    <script>
+      window.setTimeout(function () {
+        window.location.replace(${JSON.stringify(pageUrl)});
+      }, 400);
+    </script>
   </head>
   <body>
     <main>

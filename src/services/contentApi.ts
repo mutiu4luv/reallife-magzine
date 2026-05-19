@@ -15,6 +15,7 @@ export type NewsItem = {
   description: string;
   desc?: string;
   image: string;
+  images?: string[];
   createdAt?: string;
 };
 
@@ -52,6 +53,8 @@ export type PastEditionItem = {
 const normalizeNewsItem = (item: NewsItem): NewsItem => ({
   ...item,
   description: item.description || item.desc || "",
+  image: item.image || item.images?.[0] || "",
+  images: Array.isArray(item.images) ? item.images : item.image ? [item.image] : [],
 });
 
 const normalizeEventItem = (item: EventItem): EventItem => ({
