@@ -1,6 +1,10 @@
 {
     "rewrites": [
       {
+        "source": "/api/share",
+        "destination": "/api/share"
+      },
+      {
         "source": "/blog/:id",
         "has": [{ "type": "header", "key": "user-agent", "value": ".*([Bb]ot|facebookexternalhit|Facebot|[Ww]hats[Aa]pp|Slack|Discord|LinkedIn|Telegram|Pinterest|SkypeUriPreview|Twitterbot).*" }],
         "destination": "/api/share?kind=post&id=:id"

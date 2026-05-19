@@ -210,6 +210,18 @@ const backPathByKind = (kind: DetailKind) => {
   return kind === "news" ? "/news" : "/blog";
 };
 
+const getReadButtonLabel = (kind: DetailKind) => {
+  if (kind === "news") {
+    return "Read news";
+  }
+
+  if (kind === "post") {
+    return "Read blog";
+  }
+
+  return "Read article";
+};
+
 const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
   const { id } = useParams();
   const [item, setItem] = useState<DetailItem | null>(null);
@@ -321,6 +333,7 @@ const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
   const contentImageFit = kind === "event" ? "contain" : "cover";
   const contentImageBg = kind === "event" ? "#0f1712" : "#15130f";
   const sharePath = id ? getRelatedPath(kind, id) : backPath;
+  const readButtonLabel = getReadButtonLabel(kind);
 
   const handleShare = async () => {
     if (!item) {
@@ -688,8 +701,6 @@ const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
                   {relatedItems.map((relatedItem) => (
                     <Paper
                       key={relatedItem.id}
-                      component={RouterLink}
-                      to={relatedItem.path}
                       elevation={0}
                       sx={{
                         overflow: "hidden",
@@ -697,7 +708,6 @@ const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
                         bgcolor: "#11110f",
                         border: "1px solid rgba(255,255,255,0.12)",
                         color: ivory,
-                        textDecoration: "none",
                         transition: "transform 180ms ease, border-color 180ms ease",
                         "&:hover": {
                           transform: "translateY(-3px)",
@@ -731,6 +741,23 @@ const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
                         <Typography sx={{ color: "#c8b98f", lineHeight: 1.65, fontSize: 14 }}>
                           {relatedItem.excerpt}
                         </Typography>
+                        <Button
+                          component={RouterLink}
+                          to={relatedItem.path}
+                          sx={{
+                            mt: 2,
+                            px: 1.6,
+                            minHeight: 36,
+                            borderRadius: 1.5,
+                            bgcolor: "#f1d68a",
+                            color: "#171410",
+                            textTransform: "none",
+                            fontWeight: 900,
+                            "&:hover": { bgcolor: gold, color: "#fff" },
+                          }}
+                        >
+                          {readButtonLabel}
+                        </Button>
                       </Box>
                     </Paper>
                   ))}
