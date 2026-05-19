@@ -143,7 +143,7 @@ export default async function handler(req, res) {
       <h1>${escapeHtml(title)}</h1>
       <p>${escapeHtml(label)}</p>
       <p>${escapeHtml(description)}</p>
-      <p><a href="${escapeHtml(pageUrl)}">Read article</a></p>
+      <p><a href="${escapeHtml(`${pageUrl}#top`)}">Read article</a></p>
     </main>
   </body>
 </html>`);

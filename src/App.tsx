@@ -1,4 +1,5 @@
-import { Route, Routes } from "react-router-dom";
+import { useEffect } from "react";
+import { Route, Routes, useLocation } from "react-router-dom";
 import LandingPage from "../src/components/Landingpage";
 import './App.css'
 import Navbar from "./components/Navbar";
@@ -13,10 +14,21 @@ import NewsScreen from "./screens/NewsScreen";
 import UpcomingEventsScreen from "./screens/UpcomingEventsScreen";
 import ContentDetailScreen from "./screens/ContentDetailScreen";
 
+const ScrollToTop = () => {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [pathname]);
+
+  return null;
+};
+
 function App() {
 
   return (
     <>
+      <ScrollToTop />
       <Navbar />
       {/* <UpcomingEventNotice /> */}
       {/* <LandingPage /> */}
