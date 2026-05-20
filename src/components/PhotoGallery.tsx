@@ -155,6 +155,8 @@ const PhotoGallery: React.FC = () => {
                   component="img"
                   src={img}
                   alt={`gallery-${i}`}
+                  loading="lazy"
+                  decoding="async"
                   sx={{
                     width: "100%",
                     height: "100%",

@@ -2730,7 +2730,7 @@ const AdminScreen: React.FC = () => {
                       }}
                     >
                       {post.image || post.images?.[0] ? (
-                        <Box component="img" src={post.image || post.images?.[0]} alt="" sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        <Box component="img" src={post.image || post.images?.[0]} alt="" loading="lazy" decoding="async" sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
                       ) : (
                         <Image />
                       )}
@@ -2879,7 +2879,7 @@ const AdminScreen: React.FC = () => {
                       }}
                     >
                       {newsItem.image ? (
-                        <Box component="img" src={newsItem.image} alt="" sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        <Box component="img" src={newsItem.image} alt="" loading="lazy" decoding="async" sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
                       ) : (
                         <Image />
                       )}
@@ -3034,6 +3034,8 @@ const AdminScreen: React.FC = () => {
                             component="img"
                             src={eventImage}
                             alt={event.title}
+                            loading="lazy"
+                            decoding="async"
                             sx={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
                           />
                         ) : (
@@ -3194,6 +3196,8 @@ const AdminScreen: React.FC = () => {
                       component="img"
                       src={edition.image}
                       alt={edition.title || `Past edition ${index + 1}`}
+                      loading="lazy"
+                      decoding="async"
                       sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                     />
                     <IconButton
@@ -3255,7 +3259,7 @@ const AdminScreen: React.FC = () => {
                     }}
                   >
                     <Box sx={{ width: 64, height: 64, borderRadius: "50%", bgcolor: "#f2f4f7", overflow: "hidden" }}>
-                      <Box component="img" src={testimony.image} alt={testimony.name} sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      <Box component="img" src={testimony.image} alt={testimony.name} loading="lazy" decoding="async" sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
                     </Box>
                     <Box sx={{ minWidth: 0 }}>
                       <Typography sx={{ fontWeight: 900, color: "#171a20" }} noWrap>
@@ -3326,7 +3330,7 @@ const AdminScreen: React.FC = () => {
                     }}
                   >
                     <Box sx={{ width: 72, height: 72, borderRadius: 1, bgcolor: "#111318", overflow: "hidden" }}>
-                      <Box component="img" src={interview.image} alt={interview.name} sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      <Box component="img" src={interview.image} alt={interview.name} loading="lazy" decoding="async" sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
                     </Box>
                     <Box sx={{ minWidth: 0 }}>
                       <Typography sx={{ fontWeight: 900, color: "#171a20" }} noWrap>
@@ -3404,6 +3408,8 @@ const AdminScreen: React.FC = () => {
                       component="img"
                       src={photo.image}
                       alt={photo.title || `Gallery image ${index + 1}`}
+                      loading="lazy"
+                      decoding="async"
                       sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                     />
                     <IconButton
@@ -3626,6 +3632,8 @@ const AdminScreen: React.FC = () => {
                     component="img"
                     src={image}
                     alt=""
+                    loading="lazy"
+                    decoding="async"
                     sx={{
                       width: "100%",
                       aspectRatio: "1 / 1",

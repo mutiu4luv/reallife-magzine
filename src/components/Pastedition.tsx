@@ -214,6 +214,7 @@ const Pastedition: React.FC = () => {
                   src={image.src}
                   alt={image.alt}
                   loading={index < visibleCount ? "eager" : "lazy"}
+                  decoding="async"
                   sx={{
                     display: "block",
                     width: "100%",

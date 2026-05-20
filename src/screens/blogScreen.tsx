@@ -420,6 +420,8 @@ RealityLife News          </Typography>
                   component="img"
                   src={post.image || post.images?.[0]}
                   alt={post.title}
+                  loading="lazy"
+                  decoding="async"
                   sx={{
                     width: "100%",
                     height: { xs: "auto", sm: 180 },

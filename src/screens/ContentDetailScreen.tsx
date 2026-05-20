@@ -662,6 +662,8 @@ const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
                           component="img"
                           src={block.src}
                           alt={block.alt || item.title}
+                          loading="lazy"
+                          decoding="async"
                           sx={{
                             width: "100%",
                             maxHeight: 620,
@@ -721,6 +723,8 @@ const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
                           component="img"
                           src={relatedItem.image}
                           alt={relatedItem.title}
+                          loading="lazy"
+                          decoding="async"
                           sx={{
                             width: "100%",
                             aspectRatio: "4 / 3",

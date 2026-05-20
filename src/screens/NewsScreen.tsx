@@ -163,6 +163,8 @@ const NewsScreen: React.FC = () => {
                       component="img"
                       src={item.image}
                       alt={item.title}
+                      loading="lazy"
+                      decoding="async"
                       sx={{
                         width: "100%",
                         height: { xs: "auto", sm: 180 },

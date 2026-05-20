@@ -268,6 +268,8 @@ const InterviewSection: React.FC = () => {
             component="img"
             src={item.image}
             alt={item.name}
+            loading="lazy"
+            decoding="async"
             sx={{
               width: "100%",
               height: { xs: 340, sm: 380, md: 420 },

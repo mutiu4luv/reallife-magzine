@@ -287,6 +287,8 @@ const UpcomingEventsScreen: React.FC = () => {
                           component="img"
                           src={primaryImage}
                           alt={eventItem.title}
+                          loading="lazy"
+                          decoding="async"
                           sx={{
                             width: "100%",
                             height: { xs: "auto", sm: 190 },
@@ -327,6 +329,8 @@ const UpcomingEventsScreen: React.FC = () => {
                                   component="img"
                                   src={eventImage}
                                   alt={`${eventItem.title} image ${imageIndex + 2}`}
+                                  loading="lazy"
+                                  decoding="async"
                                   sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                                 />
                                 {imageIndex === secondaryImages.length - 1 && remainingImages > 0 && (

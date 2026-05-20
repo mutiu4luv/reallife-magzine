@@ -118,6 +118,7 @@ const TestimonyCard: React.FC<{
             <Avatar
               src={item.image}
               alt={item.name}
+              slotProps={{ img: { loading: "lazy", decoding: "async" } }}
               sx={{
                 width: 70,
                 height: 70,

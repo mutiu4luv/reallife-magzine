@@ -169,7 +169,7 @@ const LatestUpdates: React.FC = () => {
                   {isLoadingCard ? (
                     <Box sx={{ height: 190, bgcolor: "#161616" }} />
                   ) : item.image ? (
-                    <Box component="img" src={item.image} alt={item.title} sx={{ width: "100%", height: 190, objectFit: "cover", display: "block", bgcolor: "#15130f" }} />
+                    <Box component="img" src={item.image} alt={item.title} loading="lazy" decoding="async" sx={{ width: "100%", height: 190, objectFit: "cover", display: "block", bgcolor: "#15130f" }} />
                   ) : (
                     <Box sx={{ height: 190, bgcolor: "#15130f", color: "#f1d68a", display: "grid", placeItems: "center", fontWeight: 950 }}>
                       RealityLife
