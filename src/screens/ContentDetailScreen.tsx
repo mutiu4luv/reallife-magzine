@@ -548,7 +548,7 @@ const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
                 alignItems: "start",
               }}
             >
-              <Box sx={{ display: "grid", gap: 2, position: { md: "sticky" }, top: { md: 24 } }}>
+              <Box sx={{ display: "grid", gap: 2, position: { md: "sticky" }, top: { md: 24 }, order: { xs: 2, md: 0 } }}>
                 <Paper
                   elevation={0}
                   sx={{
@@ -634,6 +634,7 @@ const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
                   color: "#15130f",
                   border: "1px solid rgba(166,124,27,0.2)",
                   boxShadow: "0 24px 65px rgba(0,0,0,0.24)",
+                  order: { xs: 1, md: 0 },
                 }}
               >
                 <Typography

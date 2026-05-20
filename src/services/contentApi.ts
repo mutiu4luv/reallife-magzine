@@ -3,6 +3,9 @@ import { API_BASE_URL } from "../config/api";
 export const NEWS_ENDPOINT = `${API_BASE_URL}/api/news`;
 export const POSTS_ENDPOINT = `${API_BASE_URL}/api/posts`;
 export const PAST_EDITIONS_ENDPOINT = `${API_BASE_URL}/api/past-editions`;
+export const TESTIMONIES_ENDPOINT = `${API_BASE_URL}/api/testimonies`;
+export const INTERVIEWS_ENDPOINT = `${API_BASE_URL}/api/interviews`;
+export const PHOTO_GALLERY_ENDPOINT = `${API_BASE_URL}/api/photo-gallery`;
 export const UPCOMING_EVENTS_ENDPOINTS = [
   `${API_BASE_URL}/api/upcoming-events`,
   `${API_BASE_URL}/api/events`,
@@ -47,6 +50,37 @@ export type PastEditionItem = {
   id?: string;
   title?: string;
   image: string;
+  createdAt?: string;
+};
+
+export type TestimonyItem = {
+  _id?: string;
+  id?: string;
+  name: string;
+  message: string;
+  image: string;
+  isActive?: boolean;
+  createdAt?: string;
+};
+
+export type InterviewItem = {
+  _id?: string;
+  id?: string;
+  name: string;
+  role: string;
+  image: string;
+  message?: string;
+  qa: Array<{ question: string; answer: string }>;
+  isActive?: boolean;
+  createdAt?: string;
+};
+
+export type PhotoGalleryItem = {
+  _id?: string;
+  id?: string;
+  title?: string;
+  image: string;
+  isActive?: boolean;
   createdAt?: string;
 };
 
@@ -140,6 +174,21 @@ export const loadPastEditions = async () =>
   normalizeCollection<PastEditionItem>(
     await requestJson<unknown>([PAST_EDITIONS_ENDPOINT], undefined, "Unable to load past editions.")
   );
+
+export const loadTestimonies = async () =>
+  normalizeCollection<TestimonyItem>(
+    await requestJson<unknown>([TESTIMONIES_ENDPOINT], undefined, "Unable to load testimonies.")
+  ).filter((item) => item.isActive !== false);
+
+export const loadInterviews = async () =>
+  normalizeCollection<InterviewItem>(
+    await requestJson<unknown>([INTERVIEWS_ENDPOINT], undefined, "Unable to load interviews.")
+  ).filter((item) => item.isActive !== false);
+
+export const loadPhotoGallery = async () =>
+  normalizeCollection<PhotoGalleryItem>(
+    await requestJson<unknown>([PHOTO_GALLERY_ENDPOINT], undefined, "Unable to load photo gallery.")
+  ).filter((item) => item.isActive !== false);
 
 export const loadNewsById = async (id: string) =>
   normalizeNewsItem(await requestJson<NewsItem>([`${NEWS_ENDPOINT}/${id}`], undefined, "Unable to load news item."));

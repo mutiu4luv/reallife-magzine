@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Typography,
@@ -13,6 +13,7 @@ import heroPng from "../assets/hero.png";
 import heroJpeg from "../assets/hero.jpeg";
 import dr from "../assets/dr.jpeg";
 import prof from "../assets/prof.jpeg";
+import { loadTestimonies } from "../services/contentApi";
 
 const gold = "#A67C1B";
 
@@ -209,7 +210,33 @@ const TestimonyCard: React.FC<{
 };
 
 const TestimonySection: React.FC = () => {
-  const randomThree = useMemo(() => shuffleArray(testimonies).slice(0, 3), []);
+  const [backendTestimonies, setBackendTestimonies] = useState<Testimony[]>([]);
+  const displayTestimonies = backendTestimonies.length ? backendTestimonies : testimonies;
+  const randomThree = useMemo(() => shuffleArray(displayTestimonies).slice(0, 3), [displayTestimonies]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    void loadTestimonies()
+      .then((items) => {
+        if (isMounted && items.length) {
+          setBackendTestimonies(items.map((item) => ({
+            name: item.name,
+            image: item.image,
+            message: item.message,
+          })));
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setBackendTestimonies([]);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <Box

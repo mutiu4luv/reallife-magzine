@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Box, Typography, Card, CardContent, Button, Container } from "@mui/material";
 import { motion } from "framer-motion";
 
@@ -7,6 +7,7 @@ import i2 from "../assets/interview2.jpeg";
 import i3 from "../assets/interview3.jpeg";
 import i4 from "../assets/interview4.jpeg";
 import i5 from "../assets/interview5.jpeg";
+import { loadInterviews } from "../services/contentApi";
 
 const gold = "#A67C1B";
 
@@ -114,11 +115,43 @@ const shuffleArray = (array: Interview[]) => {
 };
 
 const InterviewSection: React.FC = () => {
+  const [backendInterviews, setBackendInterviews] = useState<Interview[]>([]);
+  const displayInterviews = backendInterviews.length ? backendInterviews : interviews;
   const randomThree = useMemo(
-    () => shuffleArray(interviews).slice(0, 3),
-    []
+    () => shuffleArray(displayInterviews).slice(0, 3),
+    [displayInterviews]
   );
   const [openIndexes, setOpenIndexes] = useState<{ [key: number]: boolean }>({});
+
+  useEffect(() => {
+    let isMounted = true;
+
+    void loadInterviews()
+      .then((items) => {
+        const validItems = items
+          .filter((item) => item.name && item.role && item.image && item.qa?.length)
+          .map((item) => ({
+            name: item.name,
+            role: item.role,
+            image: item.image,
+            message: item.message,
+            qa: item.qa,
+          }));
+
+        if (isMounted && validItems.length) {
+          setBackendInterviews(validItems);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setBackendInterviews([]);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleToggle = (idx: number) => {
     setOpenIndexes((prev) => ({ ...prev, [idx]: !prev[idx] }));

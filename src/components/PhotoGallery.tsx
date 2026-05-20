@@ -9,13 +9,38 @@ import g2 from "../assets/gallery2.jpeg";
 import g3 from "../assets/gallery3.jpeg";
 import g4 from "../assets/gallery4.jpeg";
 import g5 from "../assets/gallery5.jpeg";
+import { loadPhotoGallery } from "../services/contentApi";
 
-const images = [g1, g2, g3, g4, g5];
+const fallbackImages = [g1, g2, g3, g4, g5];
 const gold = "#A67C1B";
 
 const PhotoGallery: React.FC = () => {
   const [current, setCurrent] = useState(0);
   const [itemsToShow, setItemsToShow] = useState(3);
+  const [backendImages, setBackendImages] = useState<string[]>([]);
+  const images = backendImages.length ? backendImages : fallbackImages;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    void loadPhotoGallery()
+      .then((items) => {
+        const loadedImages = items.map((item) => item.image).filter(Boolean);
+
+        if (isMounted && loadedImages.length) {
+          setBackendImages(loadedImages);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setBackendImages([]);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     const handleResize = () => {
@@ -27,7 +52,7 @@ const PhotoGallery: React.FC = () => {
     handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, []);
+  }, [images.length]);
 
   const maxIndex = Math.max(images.length - itemsToShow, 0);
 

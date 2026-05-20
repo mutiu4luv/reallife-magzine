@@ -42,7 +42,13 @@ import {
   ToggleOn,
 } from "@mui/icons-material";
 import { API_BASE_URL } from "../config/api";
-import { NEWS_ENDPOINT, PAST_EDITIONS_ENDPOINT } from "../services/contentApi";
+import {
+  INTERVIEWS_ENDPOINT,
+  NEWS_ENDPOINT,
+  PAST_EDITIONS_ENDPOINT,
+  PHOTO_GALLERY_ENDPOINT,
+  TESTIMONIES_ENDPOINT,
+} from "../services/contentApi";
 import { shareContent } from "../utils/share";
 
 const POST_ENDPOINT = `${API_BASE_URL}/api/posts`;
@@ -59,6 +65,7 @@ const MAX_EVENT_TOTAL_UPLOAD_BYTES = 4 * 1024 * 1024;
 const MAX_IMAGE_SIZE_LABEL = "1.2MB";
 const MAX_EVENT_TOTAL_UPLOAD_LABEL = "4MB";
 const ADMIN_PAGE_SIZE = 6;
+const MAX_INTERVIEW_QA = 6;
 
 type PostType = "Magazine" | "Book";
 
@@ -106,6 +113,34 @@ type PastEdition = {
   createdAt?: string;
 };
 
+type Testimony = {
+  _id?: string;
+  name: string;
+  message: string;
+  image: string;
+  isActive?: boolean;
+  createdAt?: string;
+};
+
+type Interview = {
+  _id?: string;
+  name: string;
+  role: string;
+  image: string;
+  message?: string;
+  qa: Array<{ question: string; answer: string }>;
+  isActive?: boolean;
+  createdAt?: string;
+};
+
+type GalleryPhoto = {
+  _id?: string;
+  title?: string;
+  image: string;
+  isActive?: boolean;
+  createdAt?: string;
+};
+
 type Feedback = {
   severity: "success" | "error";
   message: string;
@@ -116,6 +151,9 @@ type PendingDelete =
   | { kind: "news"; item: NewsItem }
   | { kind: "event"; item: UpcomingEvent }
   | { kind: "pastEdition"; item: PastEdition }
+  | { kind: "testimony"; item: Testimony }
+  | { kind: "interview"; item: Interview }
+  | { kind: "galleryPhoto"; item: GalleryPhoto }
   | null;
 
 type PendingEdit =
@@ -124,7 +162,16 @@ type PendingEdit =
   | { kind: "event"; item: UpcomingEvent }
   | null;
 
-type ActiveView = "dashboard" | "posts" | "news" | "events" | "pastEditions" | "messages";
+type ActiveView =
+  | "dashboard"
+  | "posts"
+  | "news"
+  | "events"
+  | "pastEditions"
+  | "testimonies"
+  | "interviews"
+  | "photoGallery"
+  | "messages";
 
 type RequestJsonOptions = {
   retryDatabaseReady?: boolean;
@@ -136,6 +183,9 @@ const navItems = [
   { id: "news", label: "News", icon: <Article fontSize="small" /> },
   { id: "events", label: "Events", icon: <EventAvailable fontSize="small" /> },
   { id: "pastEditions", label: "Past Editions", icon: <PhotoLibrary fontSize="small" /> },
+  { id: "testimonies", label: "Testimonies", icon: <AutoStories fontSize="small" /> },
+  { id: "interviews", label: "Interviews", icon: <Article fontSize="small" /> },
+  { id: "photoGallery", label: "Photo Gallery", icon: <PhotoLibrary fontSize="small" /> },
   { id: "messages", label: "Messages", icon: <Mail fontSize="small" /> },
 ] satisfies Array<{ id: ActiveView; label: string; icon: React.ReactNode }>;
 
@@ -159,6 +209,18 @@ const viewCopy: Record<ActiveView, { title: string; subtitle: string }> = {
   pastEditions: {
     title: "Past Editions",
     subtitle: "Upload images that appear in the homepage past edition section.",
+  },
+  testimonies: {
+    title: "Reader Testimonies",
+    subtitle: "Add testimonies that appear in the homepage testimony section.",
+  },
+  interviews: {
+    title: "Interview Section",
+    subtitle: "Add interview cards with image, role, and Q&A content.",
+  },
+  photoGallery: {
+    title: "Photo Gallery",
+    subtitle: "Upload images that appear in the homepage photo gallery carousel.",
   },
   messages: {
     title: "Contact Messages",
@@ -322,6 +384,22 @@ const getPageCount = (total: number) => Math.max(Math.ceil(total / ADMIN_PAGE_SI
 const paginateItems = <T,>(items: T[], page: number) =>
   items.slice((page - 1) * ADMIN_PAGE_SIZE, page * ADMIN_PAGE_SIZE);
 
+const getDeleteItemLabel = (item: PendingDelete) => {
+  if (!item) {
+    return "this item";
+  }
+
+  if ("title" in item.item && item.item.title) {
+    return item.item.title;
+  }
+
+  if ("name" in item.item && item.item.name) {
+    return item.item.name;
+  }
+
+  return "this item";
+};
+
 const AdminLoader = () => (
   <Paper
     elevation={0}
@@ -427,20 +505,33 @@ const AdminScreen: React.FC = () => {
   const newsFormRef = useRef<HTMLFormElement>(null);
   const eventFormRef = useRef<HTMLFormElement>(null);
   const pastEditionFormRef = useRef<HTMLFormElement>(null);
+  const testimonyFormRef = useRef<HTMLFormElement>(null);
+  const interviewFormRef = useRef<HTMLFormElement>(null);
+  const photoGalleryFormRef = useRef<HTMLFormElement>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [news, setNews] = useState<NewsItem[]>([]);
   const [events, setEvents] = useState<UpcomingEvent[]>([]);
   const [pastEditions, setPastEditions] = useState<PastEdition[]>([]);
+  const [testimonies, setTestimonies] = useState<Testimony[]>([]);
+  const [interviews, setInterviews] = useState<Interview[]>([]);
+  const [galleryPhotos, setGalleryPhotos] = useState<GalleryPhoto[]>([]);
   const [messages, setMessages] = useState<ContactMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingPost, setIsSavingPost] = useState(false);
   const [isSavingNews, setIsSavingNews] = useState(false);
   const [isSavingEvent, setIsSavingEvent] = useState(false);
   const [isSavingPastEdition, setIsSavingPastEdition] = useState(false);
+  const [isSavingTestimony, setIsSavingTestimony] = useState(false);
+  const [isSavingInterview, setIsSavingInterview] = useState(false);
+  const [isSavingPhotoGallery, setIsSavingPhotoGallery] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [selectedBlogImageNames, setSelectedBlogImageNames] = useState("");
   const [selectedPastEditionImageNames, setSelectedPastEditionImageNames] = useState("");
+  const [selectedTestimonyImageNames, setSelectedTestimonyImageNames] = useState("");
+  const [selectedInterviewImageNames, setSelectedInterviewImageNames] = useState("");
+  const [selectedPhotoGalleryImageNames, setSelectedPhotoGalleryImageNames] = useState("");
+  const [interviewQaCount, setInterviewQaCount] = useState(1);
   const [selectedNewsImageNames, setSelectedNewsImageNames] = useState("");
   const [selectedNewsImagePreviews, setSelectedNewsImagePreviews] = useState<string[]>([]);
   const [selectedEventImages, setSelectedEventImages] = useState<File[]>([]);
@@ -529,12 +620,24 @@ const AdminScreen: React.FC = () => {
 
   const loadAdminData = useCallback(async () => {
     setIsLoading(true);
-    const [postResult, eventResult, messageResult, newsResult, pastEditionResult] = await Promise.all([
+    const [
+      postResult,
+      eventResult,
+      messageResult,
+      newsResult,
+      pastEditionResult,
+      testimonyResult,
+      interviewResult,
+      photoGalleryResult,
+    ] = await Promise.all([
       requestCollection<Post>([POST_ENDPOINT], "Unable to load blogs."),
       requestCollection<UpcomingEvent>(EVENT_ENDPOINTS, "Unable to load upcoming events."),
       requestCollection<ContactMessage>(CONTACT_ENDPOINTS, "Unable to load contact messages."),
       requestCollection<NewsItem>([NEWS_ENDPOINT], "Unable to load news."),
       requestCollection<PastEdition>([PAST_EDITIONS_ENDPOINT], "Unable to load past editions."),
+      requestCollection<Testimony>([TESTIMONIES_ENDPOINT], "Unable to load testimonies."),
+      requestCollection<Interview>([INTERVIEWS_ENDPOINT], "Unable to load interviews."),
+      requestCollection<GalleryPhoto>([PHOTO_GALLERY_ENDPOINT], "Unable to load photo gallery."),
     ]);
 
     setPosts(postResult.items);
@@ -542,6 +645,9 @@ const AdminScreen: React.FC = () => {
     setEvents(eventResult.items);
     setMessages(messageResult.items);
     setPastEditions(pastEditionResult.items);
+    setTestimonies(testimonyResult.items);
+    setInterviews(interviewResult.items);
+    setGalleryPhotos(photoGalleryResult.items);
 
     const failedSections = [
       postResult.error && "blogs",
@@ -549,6 +655,9 @@ const AdminScreen: React.FC = () => {
       messageResult.error && "messages",
       newsResult.error && "news",
       pastEditionResult.error && "past editions",
+      testimonyResult.error && "testimonies",
+      interviewResult.error && "interviews",
+      photoGalleryResult.error && "photo gallery",
     ].filter(Boolean);
 
     if (failedSections.length > 0) {
@@ -1122,6 +1231,158 @@ const AdminScreen: React.FC = () => {
     }
   };
 
+  const handleTestimonySubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const name = String(formData.get("name") || "").trim();
+    const message = String(formData.get("message") || "").trim();
+    const imageFiles = formData.getAll("images").filter(isUsableImageFile).slice(0, 1);
+
+    if (!name || !message || imageFiles.length === 0) {
+      setFeedback({ severity: "error", message: "Name, message, and image are required." });
+      return;
+    }
+
+    const largeImageNames = getLargeImageNames(imageFiles);
+    if (largeImageNames.length > 0) {
+      setFeedback({ severity: "error", message: buildLargeImageMessage(largeImageNames) });
+      return;
+    }
+
+    const testimonyFormData = new FormData();
+    testimonyFormData.set("name", name);
+    testimonyFormData.set("message", message);
+    testimonyFormData.set("isActive", formData.get("isActive") === "on" ? "true" : "false");
+    imageFiles.forEach((image) => testimonyFormData.append("images", image));
+
+    setIsSavingTestimony(true);
+    try {
+      const createdTestimony = await requestJson<Testimony>(
+        [TESTIMONIES_ENDPOINT],
+        { method: "POST", body: testimonyFormData },
+        "Unable to create testimony."
+      );
+
+      setTestimonies((currentTestimonies) => [createdTestimony, ...currentTestimonies]);
+      testimonyFormRef.current?.reset();
+      setSelectedTestimonyImageNames("");
+      setFeedback({ severity: "success", message: "Testimony created successfully." });
+    } catch (error) {
+      setFeedback({
+        severity: "error",
+        message: error instanceof Error ? error.message : "Unable to create testimony.",
+      });
+    } finally {
+      setIsSavingTestimony(false);
+    }
+  };
+
+  const handleInterviewSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const name = String(formData.get("name") || "").trim();
+    const role = String(formData.get("role") || "").trim();
+    const message = String(formData.get("message") || "").trim();
+    const questions = formData.getAll("question").map((value) => String(value || "").trim());
+    const answers = formData.getAll("answer").map((value) => String(value || "").trim());
+    const qa = questions
+      .map((question, index) => ({ question, answer: answers[index] || "" }))
+      .filter((item) => item.question && item.answer);
+    const imageFiles = formData.getAll("images").filter(isUsableImageFile).slice(0, 1);
+
+    if (!name || !role || qa.length === 0 || imageFiles.length === 0) {
+      setFeedback({ severity: "error", message: "Name, role, image, and at least one complete question and answer are required." });
+      return;
+    }
+
+    const largeImageNames = getLargeImageNames(imageFiles);
+    if (largeImageNames.length > 0) {
+      setFeedback({ severity: "error", message: buildLargeImageMessage(largeImageNames) });
+      return;
+    }
+
+    const interviewFormData = new FormData();
+    interviewFormData.set("name", name);
+    interviewFormData.set("role", role);
+    interviewFormData.set("message", message);
+    interviewFormData.set("qa", JSON.stringify(qa));
+    interviewFormData.set("isActive", formData.get("isActive") === "on" ? "true" : "false");
+    imageFiles.forEach((image) => interviewFormData.append("images", image));
+
+    setIsSavingInterview(true);
+    try {
+      const createdInterview = await requestJson<Interview>(
+        [INTERVIEWS_ENDPOINT],
+        { method: "POST", body: interviewFormData },
+        "Unable to create interview."
+      );
+
+      setInterviews((currentInterviews) => [createdInterview, ...currentInterviews]);
+      interviewFormRef.current?.reset();
+      setSelectedInterviewImageNames("");
+      setInterviewQaCount(1);
+      setFeedback({ severity: "success", message: "Interview created successfully." });
+    } catch (error) {
+      setFeedback({
+        severity: "error",
+        message: error instanceof Error ? error.message : "Unable to create interview.",
+      });
+    } finally {
+      setIsSavingInterview(false);
+    }
+  };
+
+  const handlePhotoGallerySubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const title = String(formData.get("title") || "").trim();
+    const imageFiles = formData.getAll("images").filter(isUsableImageFile);
+
+    if (imageFiles.length === 0) {
+      setFeedback({ severity: "error", message: "Choose at least one gallery image." });
+      return;
+    }
+
+    const uploadableImages = imageFiles.slice(0, MAX_EVENT_IMAGES);
+    const largeImageNames = getLargeImageNames(uploadableImages);
+
+    if (largeImageNames.length > 0) {
+      setFeedback({ severity: "error", message: buildLargeImageMessage(largeImageNames) });
+      return;
+    }
+
+    if (getTotalFileSize(uploadableImages) > MAX_EVENT_TOTAL_UPLOAD_BYTES) {
+      setFeedback({ severity: "error", message: buildTotalUploadTooLargeMessage() });
+      return;
+    }
+
+    const photoGalleryFormData = new FormData();
+    photoGalleryFormData.set("title", title);
+    photoGalleryFormData.set("isActive", formData.get("isActive") === "on" ? "true" : "false");
+    uploadableImages.forEach((image) => photoGalleryFormData.append("images", image));
+
+    setIsSavingPhotoGallery(true);
+    try {
+      const createdPhotos = await requestJson<GalleryPhoto[]>(
+        [PHOTO_GALLERY_ENDPOINT],
+        { method: "POST", body: photoGalleryFormData },
+        "Unable to upload gallery images."
+      );
+
+      setGalleryPhotos((currentPhotos) => [...createdPhotos, ...currentPhotos]);
+      photoGalleryFormRef.current?.reset();
+      setSelectedPhotoGalleryImageNames("");
+      setFeedback({ severity: "success", message: "Gallery images uploaded successfully." });
+    } catch (error) {
+      setFeedback({
+        severity: "error",
+        message: error instanceof Error ? error.message : "Unable to upload gallery images.",
+      });
+    } finally {
+      setIsSavingPhotoGallery(false);
+    }
+  };
+
   const handleDeletePost = async (post: Post) => {
     if (!post._id) {
       setFeedback({ severity: "error", message: "This blog cannot be deleted because it has no database id." });
@@ -1169,6 +1430,21 @@ const AdminScreen: React.FC = () => {
 
     if (itemToDelete.kind === "pastEdition") {
       await handleDeletePastEdition(itemToDelete.item);
+      return;
+    }
+
+    if (itemToDelete.kind === "testimony") {
+      await handleDeleteTestimony(itemToDelete.item);
+      return;
+    }
+
+    if (itemToDelete.kind === "interview") {
+      await handleDeleteInterview(itemToDelete.item);
+      return;
+    }
+
+    if (itemToDelete.kind === "galleryPhoto") {
+      await handleDeleteGalleryPhoto(itemToDelete.item);
       return;
     }
 
@@ -1254,6 +1530,91 @@ const AdminScreen: React.FC = () => {
       setFeedback({
         severity: "error",
         message: error instanceof Error ? error.message : "Unable to delete past edition image.",
+      });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleDeleteTestimony = async (testimony: Testimony) => {
+    if (!testimony._id) {
+      setFeedback({ severity: "error", message: "This testimony cannot be deleted because it has no database id." });
+      return;
+    }
+
+    setDeletingId(testimony._id);
+    setFeedback({ severity: "success", message: `Deleting "${testimony.name}"...` });
+    try {
+      await requestJson<{ message: string }>(
+        [`${TESTIMONIES_ENDPOINT}/${testimony._id}`],
+        { method: "DELETE" },
+        "Unable to delete testimony."
+      );
+
+      setTestimonies((currentTestimonies) =>
+        currentTestimonies.filter((currentTestimony) => currentTestimony._id !== testimony._id)
+      );
+      setFeedback({ severity: "success", message: "Testimony deleted successfully." });
+    } catch (error) {
+      setFeedback({
+        severity: "error",
+        message: error instanceof Error ? error.message : "Unable to delete testimony.",
+      });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleDeleteInterview = async (interview: Interview) => {
+    if (!interview._id) {
+      setFeedback({ severity: "error", message: "This interview cannot be deleted because it has no database id." });
+      return;
+    }
+
+    setDeletingId(interview._id);
+    setFeedback({ severity: "success", message: `Deleting "${interview.name}"...` });
+    try {
+      await requestJson<{ message: string }>(
+        [`${INTERVIEWS_ENDPOINT}/${interview._id}`],
+        { method: "DELETE" },
+        "Unable to delete interview."
+      );
+
+      setInterviews((currentInterviews) =>
+        currentInterviews.filter((currentInterview) => currentInterview._id !== interview._id)
+      );
+      setFeedback({ severity: "success", message: "Interview deleted successfully." });
+    } catch (error) {
+      setFeedback({
+        severity: "error",
+        message: error instanceof Error ? error.message : "Unable to delete interview.",
+      });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleDeleteGalleryPhoto = async (photo: GalleryPhoto) => {
+    if (!photo._id) {
+      setFeedback({ severity: "error", message: "This gallery image cannot be deleted because it has no database id." });
+      return;
+    }
+
+    setDeletingId(photo._id);
+    setFeedback({ severity: "success", message: "Deleting gallery image..." });
+    try {
+      await requestJson<{ message: string }>(
+        [`${PHOTO_GALLERY_ENDPOINT}/${photo._id}`],
+        { method: "DELETE" },
+        "Unable to delete gallery image."
+      );
+
+      setGalleryPhotos((currentPhotos) => currentPhotos.filter((currentPhoto) => currentPhoto._id !== photo._id));
+      setFeedback({ severity: "success", message: "Gallery image deleted successfully." });
+    } catch (error) {
+      setFeedback({
+        severity: "error",
+        message: error instanceof Error ? error.message : "Unable to delete gallery image.",
       });
     } finally {
       setDeletingId(null);
@@ -1423,6 +1784,9 @@ const AdminScreen: React.FC = () => {
                 { label: "Books", value: books, icon: <AutoStories /> },
                 { label: "Active events", value: activeEvents, icon: <ToggleOn /> },
                 { label: "Past edition images", value: pastEditions.length, icon: <PhotoLibrary /> },
+                { label: "Testimonies", value: testimonies.length, icon: <AutoStories /> },
+                { label: "Interviews", value: interviews.length, icon: <Article /> },
+                { label: "Gallery photos", value: galleryPhotos.length, icon: <PhotoLibrary /> },
                 { label: "Contact messages", value: messages.length, icon: <Mail /> },
               ].map((item) => (
                 <Paper key={item.label} elevation={0} sx={{ p: 2.25, border: "1px solid #e6e8ec", borderRadius: 2 }}>
@@ -1442,7 +1806,13 @@ const AdminScreen: React.FC = () => {
             </Box>
           )}
 
-          {(activeView === "posts" || activeView === "news" || activeView === "events" || activeView === "pastEditions") && (
+          {(activeView === "posts" ||
+            activeView === "news" ||
+            activeView === "events" ||
+            activeView === "pastEditions" ||
+            activeView === "testimonies" ||
+            activeView === "interviews" ||
+            activeView === "photoGallery") && (
           <Box
             sx={{
               display: "grid",
@@ -1985,6 +2355,303 @@ const AdminScreen: React.FC = () => {
                   }}
                 >
                   {isSavingPastEdition ? "Uploading..." : "Upload images"}
+                </Button>
+              </Stack>
+            </Paper>
+            )}
+
+            {activeView === "testimonies" && (
+            <Paper
+              ref={testimonyFormRef}
+              component="form"
+              onSubmit={handleTestimonySubmit}
+              elevation={0}
+              sx={{ p: { xs: 2, md: 3 }, border: "1px solid #e6e8ec", borderRadius: 2 }}
+            >
+              <Stack spacing={2.2}>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
+                    <AutoStories sx={{ color: "#caa64a" }} />
+                    <Typography variant="h6" sx={{ fontWeight: 900 }}>
+                      Add Testimony
+                    </Typography>
+                  </Box>
+                  <Chip size="small" label="Testimony API" sx={{ bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 800 }} />
+                </Box>
+
+                <Divider />
+
+                <TextField required label="Reader name" name="name" fullWidth />
+                <TextField required multiline minRows={4} label="Message" name="message" fullWidth />
+
+                <Box>
+                  <Button
+                    component="label"
+                    variant="outlined"
+                    startIcon={<CloudUpload />}
+                    sx={{
+                      borderColor: "#caa64a",
+                      color: "#6f5517",
+                      textTransform: "none",
+                      fontWeight: 900,
+                      "&:hover": { borderColor: "#caa64a", bgcolor: "#f7edd0" },
+                    }}
+                  >
+                    Select testimony image
+                    <input
+                      hidden
+                      required
+                      type="file"
+                      name="images"
+                      accept="image/*"
+                      onChange={(changeEvent) => {
+                        const names = Array.from(changeEvent.target.files || []).map((file) => file.name).join(", ");
+                        setSelectedTestimonyImageNames(names);
+                      }}
+                    />
+                  </Button>
+                  <Typography sx={{ color: "#667085", fontSize: 13, mt: 1 }}>
+                    {selectedTestimonyImageNames || "No image selected"}
+                  </Typography>
+                </Box>
+
+                <FormControlLabel
+                  control={<Checkbox name="isActive" defaultChecked sx={{ color: "#caa64a", "&.Mui-checked": { color: "#caa64a" } }} />}
+                  label="Show on homepage"
+                />
+
+                <Button
+                  type="submit"
+                  disabled={isSavingTestimony}
+                  startIcon={<Save />}
+                  sx={{
+                    alignSelf: "flex-start",
+                    bgcolor: "#111318",
+                    color: "#fff",
+                    textTransform: "none",
+                    fontWeight: 900,
+                    px: 3,
+                    "&:hover": { bgcolor: "#2a2f38" },
+                  }}
+                >
+                  {isSavingTestimony ? "Saving..." : "Create testimony"}
+                </Button>
+              </Stack>
+            </Paper>
+            )}
+
+            {activeView === "interviews" && (
+            <Paper
+              ref={interviewFormRef}
+              component="form"
+              onSubmit={handleInterviewSubmit}
+              elevation={0}
+              sx={{ p: { xs: 2, md: 3 }, border: "1px solid #e6e8ec", borderRadius: 2 }}
+            >
+              <Stack spacing={2.2}>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
+                    <Article sx={{ color: "#caa64a" }} />
+                    <Typography variant="h6" sx={{ fontWeight: 900 }}>
+                      Add Interview
+                    </Typography>
+                  </Box>
+                  <Chip size="small" label="Interview API" sx={{ bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 800 }} />
+                </Box>
+
+                <Divider />
+
+                <TextField required label="Interviewee name" name="name" fullWidth />
+                <TextField required label="Role" name="role" fullWidth />
+                <TextField label="Intro text" name="message" fullWidth />
+
+                {Array.from({ length: interviewQaCount }).map((_, index) => (
+                  <Box
+                    key={index}
+                    sx={{
+                      display: "grid",
+                      gap: 1.5,
+                      p: 1.5,
+                      border: "1px solid #edf0f2",
+                      borderRadius: 1.5,
+                      bgcolor: "#fff",
+                    }}
+                  >
+                    <Typography sx={{ color: "#667085", fontSize: 13, fontWeight: 900 }}>
+                      Q&A {index + 1}
+                    </Typography>
+                    <TextField required={index === 0} multiline minRows={2} label="Question" name="question" fullWidth />
+                    <TextField required={index === 0} multiline minRows={4} label="Answer" name="answer" fullWidth />
+                  </Box>
+                ))}
+
+                <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                  <Button
+                    type="button"
+                    variant="outlined"
+                    startIcon={<Add />}
+                    disabled={interviewQaCount >= MAX_INTERVIEW_QA}
+                    onClick={() => setInterviewQaCount((count) => Math.min(count + 1, MAX_INTERVIEW_QA))}
+                    sx={{
+                      borderColor: "#caa64a",
+                      color: "#6f5517",
+                      textTransform: "none",
+                      fontWeight: 900,
+                      "&:hover": { borderColor: "#caa64a", bgcolor: "#f7edd0" },
+                    }}
+                  >
+                    Add question
+                  </Button>
+                  {interviewQaCount > 1 && (
+                    <Button
+                      type="button"
+                      variant="outlined"
+                      startIcon={<Delete />}
+                      onClick={() => setInterviewQaCount((count) => Math.max(count - 1, 1))}
+                      sx={{
+                        borderColor: "#fda29b",
+                        color: "#b42318",
+                        textTransform: "none",
+                        fontWeight: 900,
+                        "&:hover": { borderColor: "#f97066", bgcolor: "#fff1f3" },
+                      }}
+                    >
+                      Remove last
+                    </Button>
+                  )}
+                </Box>
+
+                <Box>
+                  <Button
+                    component="label"
+                    variant="outlined"
+                    startIcon={<CloudUpload />}
+                    sx={{
+                      borderColor: "#caa64a",
+                      color: "#6f5517",
+                      textTransform: "none",
+                      fontWeight: 900,
+                      "&:hover": { borderColor: "#caa64a", bgcolor: "#f7edd0" },
+                    }}
+                  >
+                    Select interview image
+                    <input
+                      hidden
+                      required
+                      type="file"
+                      name="images"
+                      accept="image/*"
+                      onChange={(changeEvent) => {
+                        const names = Array.from(changeEvent.target.files || []).map((file) => file.name).join(", ");
+                        setSelectedInterviewImageNames(names);
+                      }}
+                    />
+                  </Button>
+                  <Typography sx={{ color: "#667085", fontSize: 13, mt: 1 }}>
+                    {selectedInterviewImageNames || "No image selected"}
+                  </Typography>
+                </Box>
+
+                <FormControlLabel
+                  control={<Checkbox name="isActive" defaultChecked sx={{ color: "#caa64a", "&.Mui-checked": { color: "#caa64a" } }} />}
+                  label="Show on homepage"
+                />
+
+                <Button
+                  type="submit"
+                  disabled={isSavingInterview}
+                  startIcon={<Save />}
+                  sx={{
+                    alignSelf: "flex-start",
+                    bgcolor: "#111318",
+                    color: "#fff",
+                    textTransform: "none",
+                    fontWeight: 900,
+                    px: 3,
+                    "&:hover": { bgcolor: "#2a2f38" },
+                  }}
+                >
+                  {isSavingInterview ? "Saving..." : "Create interview"}
+                </Button>
+              </Stack>
+            </Paper>
+            )}
+
+            {activeView === "photoGallery" && (
+            <Paper
+              ref={photoGalleryFormRef}
+              component="form"
+              onSubmit={handlePhotoGallerySubmit}
+              elevation={0}
+              sx={{ p: { xs: 2, md: 3 }, border: "1px solid #e6e8ec", borderRadius: 2 }}
+            >
+              <Stack spacing={2.2}>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
+                    <PhotoLibrary sx={{ color: "#caa64a" }} />
+                    <Typography variant="h6" sx={{ fontWeight: 900 }}>
+                      Add Photo Gallery Images
+                    </Typography>
+                  </Box>
+                  <Chip size="small" label="Photo Gallery API" sx={{ bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 800 }} />
+                </Box>
+
+                <Divider />
+
+                <TextField label="Image title" name="title" fullWidth />
+
+                <Box>
+                  <Button
+                    component="label"
+                    variant="outlined"
+                    startIcon={<CloudUpload />}
+                    sx={{
+                      borderColor: "#caa64a",
+                      color: "#6f5517",
+                      textTransform: "none",
+                      fontWeight: 900,
+                      "&:hover": { borderColor: "#caa64a", bgcolor: "#f7edd0" },
+                    }}
+                  >
+                    Select gallery images
+                    <input
+                      hidden
+                      required
+                      multiple
+                      type="file"
+                      name="images"
+                      accept="image/*"
+                      onChange={(changeEvent) => {
+                        const files = Array.from(changeEvent.target.files || []);
+                        setSelectedPhotoGalleryImageNames(files.slice(0, MAX_EVENT_IMAGES).map((file) => file.name).join(", "));
+                      }}
+                    />
+                  </Button>
+                  <Typography sx={{ color: "#667085", fontSize: 13, mt: 1 }}>
+                    {selectedPhotoGalleryImageNames || "No image selected"}
+                  </Typography>
+                </Box>
+
+                <FormControlLabel
+                  control={<Checkbox name="isActive" defaultChecked sx={{ color: "#caa64a", "&.Mui-checked": { color: "#caa64a" } }} />}
+                  label="Show on homepage"
+                />
+
+                <Button
+                  type="submit"
+                  disabled={isSavingPhotoGallery}
+                  startIcon={<Save />}
+                  sx={{
+                    alignSelf: "flex-start",
+                    bgcolor: "#111318",
+                    color: "#fff",
+                    textTransform: "none",
+                    fontWeight: 900,
+                    px: 3,
+                    "&:hover": { bgcolor: "#2a2f38" },
+                  }}
+                >
+                  {isSavingPhotoGallery ? "Uploading..." : "Upload gallery images"}
                 </Button>
               </Stack>
             </Paper>
@@ -2555,6 +3222,216 @@ const AdminScreen: React.FC = () => {
             </Paper>
             )}
 
+            {activeView === "testimonies" && (
+            <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid #e6e8ec", borderRadius: 2 }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: { xs: "flex-start", md: "center" },
+                  justifyContent: "space-between",
+                  gap: 2,
+                  flexDirection: { xs: "column", md: "row" },
+                  mb: 2,
+                }}
+              >
+                <Typography variant="h6" sx={{ fontWeight: 900 }}>
+                  Homepage Testimonies
+                </Typography>
+                <Chip size="small" label={`${testimonies.length} total`} sx={{ bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 900 }} />
+              </Box>
+
+              <Stack spacing={1.5}>
+                {testimonies.map((testimony) => (
+                  <Box
+                    key={testimony._id || `${testimony.name}-${testimony.createdAt}`}
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: { xs: "64px 1fr", sm: "64px 1fr auto" },
+                      gap: 1.5,
+                      alignItems: "center",
+                      border: "1px solid #edf0f2",
+                      borderRadius: 1.5,
+                      p: 1.25,
+                    }}
+                  >
+                    <Box sx={{ width: 64, height: 64, borderRadius: "50%", bgcolor: "#f2f4f7", overflow: "hidden" }}>
+                      <Box component="img" src={testimony.image} alt={testimony.name} sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    </Box>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography sx={{ fontWeight: 900, color: "#171a20" }} noWrap>
+                        {testimony.name}
+                      </Typography>
+                      <Typography sx={{ color: "#667085", fontSize: 13 }} noWrap>
+                        {testimony.message}
+                      </Typography>
+                    </Box>
+                    <Button
+                      onClick={() => setPendingDelete({ kind: "testimony", item: testimony })}
+                      disabled={deletingId === testimony._id}
+                      startIcon={<Delete />}
+                      size="small"
+                      sx={{
+                        gridColumn: { xs: "1 / -1", sm: "auto" },
+                        justifySelf: { xs: "stretch", sm: "end" },
+                        color: "#b42318",
+                        border: "1px solid #fda29b",
+                        bgcolor: "#fff",
+                        textTransform: "none",
+                        fontWeight: 900,
+                        "&:hover": { bgcolor: "#fff1f3", borderColor: "#f97066" },
+                      }}
+                    >
+                      Delete
+                    </Button>
+                  </Box>
+                ))}
+
+                {!testimonies.length && !isLoading && (
+                  <Typography sx={{ color: "#667085" }}>No testimonies returned from the API yet.</Typography>
+                )}
+              </Stack>
+            </Paper>
+            )}
+
+            {activeView === "interviews" && (
+            <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid #e6e8ec", borderRadius: 2 }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: { xs: "flex-start", md: "center" },
+                  justifyContent: "space-between",
+                  gap: 2,
+                  flexDirection: { xs: "column", md: "row" },
+                  mb: 2,
+                }}
+              >
+                <Typography variant="h6" sx={{ fontWeight: 900 }}>
+                  Homepage Interviews
+                </Typography>
+                <Chip size="small" label={`${interviews.length} total`} sx={{ bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 900 }} />
+              </Box>
+
+              <Stack spacing={1.5}>
+                {interviews.map((interview) => (
+                  <Box
+                    key={interview._id || `${interview.name}-${interview.createdAt}`}
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: { xs: "72px 1fr", sm: "72px 1fr auto" },
+                      gap: 1.5,
+                      alignItems: "center",
+                      border: "1px solid #edf0f2",
+                      borderRadius: 1.5,
+                      p: 1.25,
+                    }}
+                  >
+                    <Box sx={{ width: 72, height: 72, borderRadius: 1, bgcolor: "#111318", overflow: "hidden" }}>
+                      <Box component="img" src={interview.image} alt={interview.name} sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    </Box>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography sx={{ fontWeight: 900, color: "#171a20" }} noWrap>
+                        {interview.name}
+                      </Typography>
+                      <Typography sx={{ color: "#667085", fontSize: 13 }} noWrap>
+                        {interview.role}
+                      </Typography>
+                    </Box>
+                    <Button
+                      onClick={() => setPendingDelete({ kind: "interview", item: interview })}
+                      disabled={deletingId === interview._id}
+                      startIcon={<Delete />}
+                      size="small"
+                      sx={{
+                        gridColumn: { xs: "1 / -1", sm: "auto" },
+                        justifySelf: { xs: "stretch", sm: "end" },
+                        color: "#b42318",
+                        border: "1px solid #fda29b",
+                        bgcolor: "#fff",
+                        textTransform: "none",
+                        fontWeight: 900,
+                        "&:hover": { bgcolor: "#fff1f3", borderColor: "#f97066" },
+                      }}
+                    >
+                      Delete
+                    </Button>
+                  </Box>
+                ))}
+
+                {!interviews.length && !isLoading && (
+                  <Typography sx={{ color: "#667085" }}>No interviews returned from the API yet.</Typography>
+                )}
+              </Stack>
+            </Paper>
+            )}
+
+            {activeView === "photoGallery" && (
+            <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid #e6e8ec", borderRadius: 2 }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: { xs: "flex-start", md: "center" },
+                  justifyContent: "space-between",
+                  gap: 2,
+                  flexDirection: { xs: "column", md: "row" },
+                  mb: 2,
+                }}
+              >
+                <Typography variant="h6" sx={{ fontWeight: 900 }}>
+                  Homepage Photo Gallery
+                </Typography>
+                <Chip size="small" label={`${galleryPhotos.length} total`} sx={{ bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 900 }} />
+              </Box>
+
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: { xs: "repeat(2, minmax(0, 1fr))", md: "repeat(4, minmax(0, 1fr))" },
+                  gap: 1.5,
+                }}
+              >
+                {galleryPhotos.map((photo, index) => (
+                  <Box
+                    key={photo._id || `${photo.image}-${index}`}
+                    sx={{
+                      position: "relative",
+                      aspectRatio: "4 / 3",
+                      overflow: "hidden",
+                      borderRadius: 1.5,
+                      bgcolor: "#111318",
+                    }}
+                  >
+                    <Box
+                      component="img"
+                      src={photo.image}
+                      alt={photo.title || `Gallery image ${index + 1}`}
+                      sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                    />
+                    <IconButton
+                      aria-label="Delete gallery image"
+                      onClick={() => setPendingDelete({ kind: "galleryPhoto", item: photo })}
+                      disabled={deletingId === photo._id}
+                      size="small"
+                      sx={{
+                        position: "absolute",
+                        top: 8,
+                        right: 8,
+                        bgcolor: "rgba(0,0,0,0.72)",
+                        color: "#fff",
+                        "&:hover": { bgcolor: "#b42318" },
+                      }}
+                    >
+                      <Delete fontSize="small" />
+                    </IconButton>
+                  </Box>
+                ))}
+              </Box>
+
+              {!galleryPhotos.length && !isLoading && (
+                <Typography sx={{ color: "#667085" }}>No gallery images returned from the API yet.</Typography>
+              )}
+            </Paper>
+            )}
+
             {activeView === "messages" && (
             <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid #e6e8ec", borderRadius: 2 }}>
               <Box
@@ -2796,7 +3673,7 @@ const AdminScreen: React.FC = () => {
         <DialogTitle sx={{ fontWeight: 900 }}>Delete item?</DialogTitle>
         <DialogContent>
           <Typography sx={{ color: "#475467" }}>
-            Do you want to delete "{pendingDelete?.item.title}"? This action cannot be undone.
+            Do you want to delete "{getDeleteItemLabel(pendingDelete)}"? This action cannot be undone.
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5 }}>
