@@ -160,7 +160,11 @@ type PendingEdit =
   | { kind: "post"; item: Post }
   | { kind: "news"; item: NewsItem }
   | { kind: "event"; item: UpcomingEvent }
+  | { kind: "testimony"; item: Testimony }
+  | { kind: "interview"; item: Interview }
   | null;
+
+type ShareableAdminItem = Extract<Exclude<PendingEdit, null>, { kind: "post" | "news" | "event" }>;
 
 type ActiveView =
   | "dashboard"
@@ -532,6 +536,7 @@ const AdminScreen: React.FC = () => {
   const [selectedInterviewImageNames, setSelectedInterviewImageNames] = useState("");
   const [selectedPhotoGalleryImageNames, setSelectedPhotoGalleryImageNames] = useState("");
   const [interviewQaCount, setInterviewQaCount] = useState(1);
+  const [editInterviewQaCount, setEditInterviewQaCount] = useState(1);
   const [selectedNewsImageNames, setSelectedNewsImageNames] = useState("");
   const [selectedNewsImagePreviews, setSelectedNewsImagePreviews] = useState<string[]>([]);
   const [selectedEventImages, setSelectedEventImages] = useState<File[]>([]);
@@ -577,11 +582,7 @@ const AdminScreen: React.FC = () => {
   const visibleEvents = useMemo(() => paginateItems(filteredEvents, safeEventPage), [safeEventPage, filteredEvents]);
   const currentView = viewCopy[activeView];
 
-  const handleShareAdminItem = async (item: PendingEdit) => {
-    if (!item) {
-      return;
-    }
-
+  const handleShareAdminItem = async (item: ShareableAdminItem) => {
     const itemId = item.kind === "event" ? item.item._id || item.item.id : item.item._id;
 
     if (!itemId) {
@@ -830,6 +831,7 @@ const AdminScreen: React.FC = () => {
 
   const handleOpenEdit = (editItem: Exclude<PendingEdit, null>) => {
     clearEditImageState();
+    setEditInterviewQaCount(editItem.kind === "interview" ? Math.max(editItem.item.qa.length, 1) : 1);
     setPendingEdit(editItem);
   };
 
@@ -896,21 +898,20 @@ const AdminScreen: React.FC = () => {
     }
 
     const formData = new FormData(event.currentTarget);
-    const title = String(formData.get("title") || "").trim();
-    const description = String(formData.get(pendingEdit.kind === "post" ? "desc" : "description") || "").trim();
-
-    if (!title || !description) {
-      setFeedback({ severity: "error", message: "Title and description are required." });
-      return;
-    }
-
     const updateFormData = new FormData();
-    updateFormData.set("title", title);
 
     if (pendingEdit.kind === "post") {
+      const title = String(formData.get("title") || "").trim();
+      const description = String(formData.get("desc") || "").trim();
       const type = String(formData.get("type") || "Magazine") as PostType;
       const imageFiles = formData.getAll("images").filter(isUsableImageFile).slice(0, MAX_EVENT_IMAGES);
 
+      if (!title || !description) {
+        setFeedback({ severity: "error", message: "Title and description are required." });
+        return;
+      }
+
+      updateFormData.set("title", title);
       updateFormData.set("desc", description);
       updateFormData.set("type", type);
 
@@ -936,7 +937,16 @@ const AdminScreen: React.FC = () => {
     }
 
     if (pendingEdit.kind === "news") {
+      const title = String(formData.get("title") || "").trim();
+      const description = String(formData.get("description") || "").trim();
       const imageFiles = formData.getAll("images").filter(isUsableImageFile).slice(0, MAX_EVENT_IMAGES);
+
+      if (!title || !description) {
+        setFeedback({ severity: "error", message: "Title and description are required." });
+        return;
+      }
+
+      updateFormData.set("title", title);
       updateFormData.set("description", description);
 
       imageFiles.forEach((image) => updateFormData.append("images", image));
@@ -960,7 +970,95 @@ const AdminScreen: React.FC = () => {
       return;
     }
 
+    if (pendingEdit.kind === "testimony") {
+      const name = String(formData.get("name") || "").trim();
+      const message = String(formData.get("message") || "").trim();
+      const imageFiles = formData.getAll("images").filter(isUsableImageFile).slice(0, 1);
+
+      if (!name || !message) {
+        setFeedback({ severity: "error", message: "Name and message are required." });
+        return;
+      }
+
+      updateFormData.set("name", name);
+      updateFormData.set("message", message);
+      updateFormData.set("isActive", formData.get("isActive") === "on" ? "true" : "false");
+      imageFiles.forEach((image) => updateFormData.append("images", image));
+
+      setIsUpdating(true);
+      try {
+        const updatedTestimony = await requestJson<Testimony>(
+          [`${TESTIMONIES_ENDPOINT}/${itemId}`],
+          { method: "PUT", body: updateFormData },
+          "Unable to update testimony."
+        );
+        setTestimonies((currentTestimonies) =>
+          currentTestimonies.map((testimony) => (testimony._id === itemId ? updatedTestimony : testimony))
+        );
+        setFeedback({ severity: "success", message: "Testimony updated successfully." });
+        setPendingEdit(null);
+        clearEditImageState();
+      } catch (error) {
+        setFeedback({ severity: "error", message: error instanceof Error ? error.message : "Unable to update testimony." });
+      } finally {
+        setIsUpdating(false);
+      }
+      return;
+    }
+
+    if (pendingEdit.kind === "interview") {
+      const name = String(formData.get("name") || "").trim();
+      const role = String(formData.get("role") || "").trim();
+      const message = String(formData.get("message") || "").trim();
+      const questions = formData.getAll("question").map((value) => String(value || "").trim());
+      const answers = formData.getAll("answer").map((value) => String(value || "").trim());
+      const qa = questions
+        .map((question, index) => ({ question, answer: answers[index] || "" }))
+        .filter((item) => item.question && item.answer);
+      const imageFiles = formData.getAll("images").filter(isUsableImageFile).slice(0, 1);
+
+      if (!name || !role || qa.length === 0) {
+        setFeedback({ severity: "error", message: "Name, role, and at least one complete question and answer are required." });
+        return;
+      }
+
+      updateFormData.set("name", name);
+      updateFormData.set("role", role);
+      updateFormData.set("message", message);
+      updateFormData.set("qa", JSON.stringify(qa));
+      updateFormData.set("isActive", formData.get("isActive") === "on" ? "true" : "false");
+      imageFiles.forEach((image) => updateFormData.append("images", image));
+
+      setIsUpdating(true);
+      try {
+        const updatedInterview = await requestJson<Interview>(
+          [`${INTERVIEWS_ENDPOINT}/${itemId}`],
+          { method: "PUT", body: updateFormData },
+          "Unable to update interview."
+        );
+        setInterviews((currentInterviews) =>
+          currentInterviews.map((interview) => (interview._id === itemId ? updatedInterview : interview))
+        );
+        setFeedback({ severity: "success", message: "Interview updated successfully." });
+        setPendingEdit(null);
+        clearEditImageState();
+      } catch (error) {
+        setFeedback({ severity: "error", message: error instanceof Error ? error.message : "Unable to update interview." });
+      } finally {
+        setIsUpdating(false);
+      }
+      return;
+    }
+
+    const title = String(formData.get("title") || "").trim();
+    const description = String(formData.get("description") || "").trim();
     const imageFiles = formData.getAll("images").filter(isUsableImageFile).slice(0, MAX_EVENT_IMAGES);
+    if (!title || !description) {
+      setFeedback({ severity: "error", message: "Title and description are required." });
+      return;
+    }
+
+    updateFormData.set("title", title);
     updateFormData.set("description", description);
     updateFormData.set("isActive", formData.get("isActive") === "on" ? "true" : "false");
     imageFiles.forEach((image) => updateFormData.append("images", image));
@@ -3269,24 +3367,43 @@ const AdminScreen: React.FC = () => {
                         {testimony.message}
                       </Typography>
                     </Box>
-                    <Button
-                      onClick={() => setPendingDelete({ kind: "testimony", item: testimony })}
-                      disabled={deletingId === testimony._id}
-                      startIcon={<Delete />}
-                      size="small"
-                      sx={{
-                        gridColumn: { xs: "1 / -1", sm: "auto" },
-                        justifySelf: { xs: "stretch", sm: "end" },
-                        color: "#b42318",
-                        border: "1px solid #fda29b",
-                        bgcolor: "#fff",
-                        textTransform: "none",
-                        fontWeight: 900,
-                        "&:hover": { bgcolor: "#fff1f3", borderColor: "#f97066" },
-                      }}
+                    <Stack
+                      direction={{ xs: "column", sm: "row" }}
+                      spacing={1}
+                      sx={{ gridColumn: { xs: "1 / -1", sm: "auto" }, justifySelf: { xs: "stretch", sm: "end" } }}
                     >
-                      Delete
-                    </Button>
+                      <Button
+                        onClick={() => handleOpenEdit({ kind: "testimony", item: testimony })}
+                        startIcon={<Edit />}
+                        size="small"
+                        sx={{
+                          color: "#6f5517",
+                          border: "1px solid #caa64a",
+                          bgcolor: "#fff",
+                          textTransform: "none",
+                          fontWeight: 900,
+                          "&:hover": { bgcolor: "#f7edd0", borderColor: "#caa64a" },
+                        }}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        onClick={() => setPendingDelete({ kind: "testimony", item: testimony })}
+                        disabled={deletingId === testimony._id}
+                        startIcon={<Delete />}
+                        size="small"
+                        sx={{
+                          color: "#b42318",
+                          border: "1px solid #fda29b",
+                          bgcolor: "#fff",
+                          textTransform: "none",
+                          fontWeight: 900,
+                          "&:hover": { bgcolor: "#fff1f3", borderColor: "#f97066" },
+                        }}
+                      >
+                        Delete
+                      </Button>
+                    </Stack>
                   </Box>
                 ))}
 
@@ -3340,24 +3457,43 @@ const AdminScreen: React.FC = () => {
                         {interview.role}
                       </Typography>
                     </Box>
-                    <Button
-                      onClick={() => setPendingDelete({ kind: "interview", item: interview })}
-                      disabled={deletingId === interview._id}
-                      startIcon={<Delete />}
-                      size="small"
-                      sx={{
-                        gridColumn: { xs: "1 / -1", sm: "auto" },
-                        justifySelf: { xs: "stretch", sm: "end" },
-                        color: "#b42318",
-                        border: "1px solid #fda29b",
-                        bgcolor: "#fff",
-                        textTransform: "none",
-                        fontWeight: 900,
-                        "&:hover": { bgcolor: "#fff1f3", borderColor: "#f97066" },
-                      }}
+                    <Stack
+                      direction={{ xs: "column", sm: "row" }}
+                      spacing={1}
+                      sx={{ gridColumn: { xs: "1 / -1", sm: "auto" }, justifySelf: { xs: "stretch", sm: "end" } }}
                     >
-                      Delete
-                    </Button>
+                      <Button
+                        onClick={() => handleOpenEdit({ kind: "interview", item: interview })}
+                        startIcon={<Edit />}
+                        size="small"
+                        sx={{
+                          color: "#6f5517",
+                          border: "1px solid #caa64a",
+                          bgcolor: "#fff",
+                          textTransform: "none",
+                          fontWeight: 900,
+                          "&:hover": { bgcolor: "#f7edd0", borderColor: "#caa64a" },
+                        }}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        onClick={() => setPendingDelete({ kind: "interview", item: interview })}
+                        disabled={deletingId === interview._id}
+                        startIcon={<Delete />}
+                        size="small"
+                        sx={{
+                          color: "#b42318",
+                          border: "1px solid #fda29b",
+                          bgcolor: "#fff",
+                          textTransform: "none",
+                          fontWeight: 900,
+                          "&:hover": { bgcolor: "#fff1f3", borderColor: "#f97066" },
+                        }}
+                      >
+                        Delete
+                      </Button>
+                    </Stack>
                   </Box>
                 ))}
 
@@ -3534,17 +3670,22 @@ const AdminScreen: React.FC = () => {
           onSubmit={handleEditSubmit}
         >
           <DialogTitle sx={{ fontWeight: 900 }}>
-            Edit {pendingEdit?.kind === "post" ? "blog" : pendingEdit?.kind === "news" ? "news" : "upcoming event"}
+            Edit{" "}
+            {pendingEdit?.kind === "post"
+              ? "blog"
+              : pendingEdit?.kind === "news"
+                ? "news"
+                : pendingEdit?.kind === "event"
+                  ? "upcoming event"
+                  : pendingEdit?.kind === "testimony"
+                    ? "testimony"
+                    : "interview"}
           </DialogTitle>
           <DialogContent>
             <Stack spacing={2.2} sx={{ pt: 1 }}>
-              <TextField
-                required
-                label="Title"
-                name="title"
-                fullWidth
-                defaultValue={pendingEdit?.item.title || ""}
-              />
+              {(pendingEdit?.kind === "post" || pendingEdit?.kind === "news" || pendingEdit?.kind === "event") && (
+                <TextField required label="Title" name="title" fullWidth defaultValue={pendingEdit.item.title || ""} />
+              )}
 
               {pendingEdit?.kind === "post" && (
                 <TextField select required label="Type" name="type" defaultValue={pendingEdit.item.type || "Magazine"} fullWidth>
@@ -3553,23 +3694,121 @@ const AdminScreen: React.FC = () => {
                 </TextField>
               )}
 
-              <TextField
-                required
-                multiline
-                minRows={4}
-                label="Description"
-                name={pendingEdit?.kind === "post" ? "desc" : "description"}
-                fullWidth
-                defaultValue={
-                  pendingEdit?.kind === "post"
-                    ? pendingEdit.item.desc
-                    : pendingEdit?.kind === "news"
-                      ? pendingEdit.item.description
-                      : pendingEdit?.item.description || ""
-                }
-              />
+              {(pendingEdit?.kind === "post" || pendingEdit?.kind === "news" || pendingEdit?.kind === "event") && (
+                <TextField
+                  required
+                  multiline
+                  minRows={4}
+                  label="Description"
+                  name={pendingEdit.kind === "post" ? "desc" : "description"}
+                  fullWidth
+                  defaultValue={
+                    pendingEdit.kind === "post"
+                      ? pendingEdit.item.desc
+                      : pendingEdit.kind === "news"
+                        ? pendingEdit.item.description
+                        : pendingEdit.item.description || ""
+                  }
+                />
+              )}
 
-              {pendingEdit?.kind === "event" && (
+              {pendingEdit?.kind === "testimony" && (
+                <>
+                  <TextField required label="Reader name" name="name" fullWidth defaultValue={pendingEdit.item.name} />
+                  <TextField
+                    required
+                    multiline
+                    minRows={4}
+                    label="Message"
+                    name="message"
+                    fullWidth
+                    defaultValue={pendingEdit.item.message}
+                  />
+                </>
+              )}
+
+              {pendingEdit?.kind === "interview" && (
+                <>
+                  <TextField required label="Interviewee name" name="name" fullWidth defaultValue={pendingEdit.item.name} />
+                  <TextField required label="Role" name="role" fullWidth defaultValue={pendingEdit.item.role} />
+                  <TextField label="Intro text" name="message" fullWidth defaultValue={pendingEdit.item.message || ""} />
+                  {Array.from({ length: editInterviewQaCount }).map((_, index) => {
+                    const qaItem = pendingEdit.item.qa[index] || { question: "", answer: "" };
+                    return (
+                    <Box
+                      key={index}
+                      sx={{
+                        display: "grid",
+                        gap: 1.5,
+                        p: 1.5,
+                        border: "1px solid #edf0f2",
+                        borderRadius: 1.5,
+                        bgcolor: "#fff",
+                      }}
+                    >
+                      <Typography sx={{ color: "#667085", fontSize: 13, fontWeight: 900 }}>
+                        Q&A {index + 1}
+                      </Typography>
+                      <TextField
+                        required={index === 0}
+                        multiline
+                        minRows={2}
+                        label="Question"
+                        name="question"
+                        fullWidth
+                        defaultValue={qaItem.question}
+                      />
+                      <TextField
+                        required={index === 0}
+                        multiline
+                        minRows={4}
+                        label="Answer"
+                        name="answer"
+                        fullWidth
+                        defaultValue={qaItem.answer}
+                      />
+                    </Box>
+                    );
+                  })}
+                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                    <Button
+                      type="button"
+                      variant="outlined"
+                      startIcon={<Add />}
+                      disabled={editInterviewQaCount >= MAX_INTERVIEW_QA}
+                      onClick={() => setEditInterviewQaCount((count) => Math.min(count + 1, MAX_INTERVIEW_QA))}
+                      sx={{
+                        borderColor: "#caa64a",
+                        color: "#6f5517",
+                        textTransform: "none",
+                        fontWeight: 900,
+                        "&:hover": { borderColor: "#caa64a", bgcolor: "#f7edd0" },
+                      }}
+                    >
+                      Add question
+                    </Button>
+                    {editInterviewQaCount > 1 && (
+                      <Button
+                        type="button"
+                        variant="outlined"
+                        startIcon={<Delete />}
+                        onClick={() => setEditInterviewQaCount((count) => Math.max(count - 1, 1))}
+                        sx={{
+                          borderColor: "#fda29b",
+                          color: "#b42318",
+                          textTransform: "none",
+                          fontWeight: 900,
+                          "&:hover": { borderColor: "#f97066", bgcolor: "#fff1f3" },
+                        }}
+                      >
+                        Remove last
+                      </Button>
+                    )}
+                  </Box>
+                </>
+              )}
+
+              {(pendingEdit?.kind === "event" || pendingEdit?.kind === "testimony" || pendingEdit?.kind === "interview") && (
                 <FormControlLabel
                   control={
                     <Checkbox
@@ -3578,7 +3817,13 @@ const AdminScreen: React.FC = () => {
                       sx={{ color: "#caa64a", "&.Mui-checked": { color: "#caa64a" } }}
                     />
                   }
-                  label="Show this event as active"
+                  label={
+                    pendingEdit?.kind === "event"
+                      ? "Show this event as active"
+                      : pendingEdit?.kind === "testimony"
+                        ? "Show on homepage"
+                        : "Show on homepage"
+                  }
                 />
               )}
 
@@ -3595,10 +3840,10 @@ const AdminScreen: React.FC = () => {
                     "&:hover": { borderColor: "#caa64a", bgcolor: "#f7edd0" },
                   }}
                 >
-                  {pendingEdit?.kind === "event" ? "Replace event images" : "Replace images"}
+                  {pendingEdit?.kind === "event" ? "Replace event images" : "Replace image"}
                   <input
                     hidden
-                    multiple
+                    multiple={pendingEdit?.kind !== "testimony" && pendingEdit?.kind !== "interview"}
                     type="file"
                     name="images"
                     accept="image/*"
@@ -3625,6 +3870,10 @@ const AdminScreen: React.FC = () => {
                       ? pendingEdit.item.images || (pendingEdit.item.image ? [pendingEdit.item.image] : [])
                       : pendingEdit?.kind === "news"
                         ? pendingEdit.item.images || (pendingEdit.item.image ? [pendingEdit.item.image] : [])
+                        : pendingEdit?.kind === "testimony" || pendingEdit?.kind === "interview"
+                          ? pendingEdit.item.image
+                            ? [pendingEdit.item.image]
+                            : []
                         : []
                 ).map((image, index) => (
                   <Box
