@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import LandingPage from "../src/components/Landingpage";
 import './App.css'
 import Navbar from "./components/Navbar";
@@ -9,10 +9,14 @@ import ContactUsScreen from "./screens/Contact";
 import ProfileScreen from "./screens/ProfileScreen";
 import BlogScreen from "./screens/blogScreen";
 import AdminScreen from "./screens/AdminScreen";
+import AuthScreen from "./screens/AuthScreen";
+import UserDashboardScreen from "./screens/UserDashboardScreen";
 // import UpcomingEventNotice from "./components/UpcomingEventNotice";
 import NewsScreen from "./screens/NewsScreen";
 import UpcomingEventsScreen from "./screens/UpcomingEventsScreen";
 import ContentDetailScreen from "./screens/ContentDetailScreen";
+import { useAuth } from "./context/useAuth";
+import { hasAnyPermission } from "./services/authApi";
 
 const ScrollToTop = () => {
   const { pathname } = useLocation();
@@ -22,6 +26,24 @@ const ScrollToTop = () => {
   }, [pathname]);
 
   return null;
+};
+
+const ProtectedAdminRoute = () => {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return null;
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (user.role !== "admin" && !hasAnyPermission(user)) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <AdminScreen />;
 };
 
 function App() {
@@ -46,7 +68,10 @@ function App() {
         <Route path="/news/:id" element={<ContentDetailScreen kind="news" />} />
         <Route path="/events" element={<UpcomingEventsScreen />} />
         <Route path="/events/:id" element={<ContentDetailScreen kind="event" />} />
-        <Route path="/admin" element={<AdminScreen />} />
+        <Route path="/login" element={<AuthScreen mode="login" />} />
+        <Route path="/register" element={<AuthScreen mode="register" />} />
+        <Route path="/dashboard" element={<UserDashboardScreen />} />
+        <Route path="/admin" element={<ProtectedAdminRoute />} />
 
       {/* </Route> */}
     </Routes>

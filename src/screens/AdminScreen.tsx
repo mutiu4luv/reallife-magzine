@@ -25,6 +25,7 @@ import {
 } from "@mui/material";
 import {
   Add,
+  AdminPanelSettings,
   Article,
   AutoStories,
   CloudUpload,
@@ -34,6 +35,7 @@ import {
   EventAvailable,
   Image,
   LibraryBooks,
+  Logout,
   Mail,
   PhotoLibrary,
   Save,
@@ -41,6 +43,7 @@ import {
   Share,
   ToggleOn,
 } from "@mui/icons-material";
+import { useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
 import {
   INTERVIEWS_ENDPOINT,
@@ -50,6 +53,19 @@ import {
   TESTIMONIES_ENDPOINT,
 } from "../services/contentApi";
 import { shareContent } from "../utils/share";
+import { useAuth } from "../context/useAuth";
+import {
+  getAuthHeaders,
+  hasPermission,
+  loadAuditLogs,
+  loadAdminRequests,
+  loadPermissionRequests,
+  loadUsers,
+  deleteUser,
+  resolveAdminRequest,
+  resolvePermissionRequest,
+} from "../services/authApi";
+import type { AuditLog, AuthUser, Permission } from "../services/authApi";
 
 const POST_ENDPOINT = `${API_BASE_URL}/api/posts`;
 const EVENT_ENDPOINTS = [`${API_BASE_URL}/api/upcoming-events`, `${API_BASE_URL}/api/events`];
@@ -175,6 +191,10 @@ type ActiveView =
   | "testimonies"
   | "interviews"
   | "photoGallery"
+  | "adminRequests"
+  | "permissionRequests"
+  | "users"
+  | "activity"
   | "messages";
 
 type RequestJsonOptions = {
@@ -190,6 +210,10 @@ const navItems = [
   { id: "testimonies", label: "Testimonies", icon: <AutoStories fontSize="small" /> },
   { id: "interviews", label: "Interviews", icon: <Article fontSize="small" /> },
   { id: "photoGallery", label: "Photo Gallery", icon: <PhotoLibrary fontSize="small" /> },
+  { id: "adminRequests", label: "Admin Requests", icon: <AdminPanelSettings fontSize="small" /> },
+  { id: "permissionRequests", label: "Blogger Requests", icon: <AdminPanelSettings fontSize="small" /> },
+  { id: "users", label: "Users", icon: <AdminPanelSettings fontSize="small" /> },
+  { id: "activity", label: "Activity", icon: <Dashboard fontSize="small" /> },
   { id: "messages", label: "Messages", icon: <Mail fontSize="small" /> },
 ] satisfies Array<{ id: ActiveView; label: string; icon: React.ReactNode }>;
 
@@ -225,6 +249,22 @@ const viewCopy: Record<ActiveView, { title: string; subtitle: string }> = {
   photoGallery: {
     title: "Photo Gallery",
     subtitle: "Upload images that appear in the homepage photo gallery carousel.",
+  },
+  adminRequests: {
+    title: "Admin Requests",
+    subtitle: "Approve users who requested access to the admin dashboard.",
+  },
+  permissionRequests: {
+    title: "Blogger Requests",
+    subtitle: "Approve users who requested full blogger access.",
+  },
+  users: {
+    title: "Users",
+    subtitle: "Admins can monitor accounts and delete users when needed.",
+  },
+  activity: {
+    title: "Activity",
+    subtitle: "Monitor important actions happening inside the app.",
   },
   messages: {
     title: "Contact Messages",
@@ -321,7 +361,9 @@ const requestJson = async <T,>(
   for (const endpoint of endpoints) {
     for (let attempt = 0; attempt <= DATABASE_READY_RETRY_DELAYS.length; attempt += 1) {
       try {
-        const response = await fetch(endpoint, init);
+        const headers = new Headers(init?.headers);
+        Object.entries(getAuthHeaders()).forEach(([key, value]) => headers.set(key, value));
+        const response = await fetch(endpoint, { ...init, headers });
 
         if (response.status === 404 && endpoint !== endpoints[endpoints.length - 1]) {
           lastError = await getErrorMessage(response, fallback);
@@ -505,6 +547,8 @@ const AdminLoader = () => (
 );
 
 const AdminScreen: React.FC = () => {
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const postFormRef = useRef<HTMLFormElement>(null);
   const newsFormRef = useRef<HTMLFormElement>(null);
   const eventFormRef = useRef<HTMLFormElement>(null);
@@ -520,6 +564,12 @@ const AdminScreen: React.FC = () => {
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [galleryPhotos, setGalleryPhotos] = useState<GalleryPhoto[]>([]);
   const [messages, setMessages] = useState<ContactMessage[]>([]);
+  const [adminRequests, setAdminRequests] = useState<AuthUser[]>([]);
+  const [permissionRequests, setPermissionRequests] = useState<AuthUser[]>([]);
+  const [users, setUsers] = useState<AuthUser[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [resolvingAdminRequestId, setResolvingAdminRequestId] = useState<string | null>(null);
+  const [resolvingPermissionRequestId, setResolvingPermissionRequestId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingPost, setIsSavingPost] = useState(false);
   const [isSavingNews, setIsSavingNews] = useState(false);
@@ -581,6 +631,27 @@ const AdminScreen: React.FC = () => {
   const visibleNews = useMemo(() => paginateItems(filteredNews, safeNewsPage), [filteredNews, safeNewsPage]);
   const visibleEvents = useMemo(() => paginateItems(filteredEvents, safeEventPage), [safeEventPage, filteredEvents]);
   const currentView = viewCopy[activeView];
+  const isOwnerAdmin = user?.role === "admin";
+  const can = useCallback((permission: Permission) => hasPermission(user, permission), [user]);
+  const visibleNavItems = useMemo(
+    () =>
+      navItems.filter((item) => {
+        if (["adminRequests", "permissionRequests", "users", "activity", "messages"].includes(item.id)) {
+          return isOwnerAdmin;
+        }
+
+        if (item.id === "posts") return can("posts:create") || can("posts:update") || can("posts:delete");
+        if (item.id === "news") return can("news:create") || can("news:update") || can("news:delete");
+        if (item.id === "events") return can("events:create") || can("events:update") || can("events:delete");
+        if (item.id === "pastEditions") return can("pastEditions:create") || can("pastEditions:delete");
+        if (item.id === "testimonies") return can("testimonies:create") || can("testimonies:update") || can("testimonies:delete");
+        if (item.id === "interviews") return can("interviews:create") || can("interviews:update") || can("interviews:delete");
+        if (item.id === "photoGallery") return can("photoGallery:create") || can("photoGallery:delete");
+
+        return true;
+      }),
+    [can, isOwnerAdmin]
+  );
 
   const handleShareAdminItem = async (item: ShareableAdminItem) => {
     const itemId = item.kind === "event" ? item.item._id || item.item.id : item.item._id;
@@ -630,15 +701,53 @@ const AdminScreen: React.FC = () => {
       testimonyResult,
       interviewResult,
       photoGalleryResult,
+      adminRequestResult,
+      permissionRequestResult,
+      userResult,
+      auditLogResult,
     ] = await Promise.all([
       requestCollection<Post>([POST_ENDPOINT], "Unable to load blogs."),
       requestCollection<UpcomingEvent>(EVENT_ENDPOINTS, "Unable to load upcoming events."),
-      requestCollection<ContactMessage>(CONTACT_ENDPOINTS, "Unable to load contact messages."),
+      isOwnerAdmin
+        ? requestCollection<ContactMessage>(CONTACT_ENDPOINTS, "Unable to load contact messages.")
+        : Promise.resolve({ items: [] as ContactMessage[], error: "" }),
       requestCollection<NewsItem>([NEWS_ENDPOINT], "Unable to load news."),
       requestCollection<PastEdition>([PAST_EDITIONS_ENDPOINT], "Unable to load past editions."),
       requestCollection<Testimony>([TESTIMONIES_ENDPOINT], "Unable to load testimonies."),
       requestCollection<Interview>([INTERVIEWS_ENDPOINT], "Unable to load interviews."),
       requestCollection<GalleryPhoto>([PHOTO_GALLERY_ENDPOINT], "Unable to load photo gallery."),
+      isOwnerAdmin
+        ? loadAdminRequests()
+        .then((items) => ({ items, error: "" }))
+        .catch((error) => ({
+          items: [] as AuthUser[],
+          error: error instanceof Error ? error.message : "Unable to load admin requests.",
+        }))
+        : Promise.resolve({ items: [] as AuthUser[], error: "" }),
+      isOwnerAdmin
+        ? loadPermissionRequests()
+            .then((items) => ({ items, error: "" }))
+            .catch((error) => ({
+              items: [] as AuthUser[],
+              error: error instanceof Error ? error.message : "Unable to load blogger requests.",
+            }))
+        : Promise.resolve({ items: [] as AuthUser[], error: "" }),
+      isOwnerAdmin
+        ? loadUsers()
+            .then((items) => ({ items, error: "" }))
+            .catch((error) => ({
+              items: [] as AuthUser[],
+              error: error instanceof Error ? error.message : "Unable to load users.",
+            }))
+        : Promise.resolve({ items: [] as AuthUser[], error: "" }),
+      isOwnerAdmin
+        ? loadAuditLogs()
+            .then((items) => ({ items, error: "" }))
+            .catch((error) => ({
+              items: [] as AuditLog[],
+              error: error instanceof Error ? error.message : "Unable to load activity.",
+            }))
+        : Promise.resolve({ items: [] as AuditLog[], error: "" }),
     ]);
 
     setPosts(postResult.items);
@@ -649,6 +758,10 @@ const AdminScreen: React.FC = () => {
     setTestimonies(testimonyResult.items);
     setInterviews(interviewResult.items);
     setGalleryPhotos(photoGalleryResult.items);
+    setAdminRequests(adminRequestResult.items);
+    setPermissionRequests(permissionRequestResult.items);
+    setUsers(userResult.items);
+    setAuditLogs(auditLogResult.items);
 
     const failedSections = [
       postResult.error && "blogs",
@@ -659,6 +772,10 @@ const AdminScreen: React.FC = () => {
       testimonyResult.error && "testimonies",
       interviewResult.error && "interviews",
       photoGalleryResult.error && "photo gallery",
+      adminRequestResult.error && "admin requests",
+      permissionRequestResult.error && "blogger requests",
+      userResult.error && "users",
+      auditLogResult.error && "activity",
     ].filter(Boolean);
 
     if (failedSections.length > 0) {
@@ -669,7 +786,7 @@ const AdminScreen: React.FC = () => {
     }
 
     setIsLoading(false);
-  }, []);
+  }, [isOwnerAdmin]);
 
   useEffect(() => {
     const loadTimer = window.setTimeout(() => {
@@ -1719,6 +1836,66 @@ const AdminScreen: React.FC = () => {
     }
   };
 
+  const handleResolveAdminRequest = async (requestUser: AuthUser, status: "approved" | "rejected") => {
+    setResolvingAdminRequestId(requestUser._id);
+    try {
+      await resolveAdminRequest(requestUser._id, status);
+      setAdminRequests((currentRequests) => currentRequests.filter((currentUser) => currentUser._id !== requestUser._id));
+      setFeedback({
+        severity: "success",
+        message: status === "approved" ? `${requestUser.name} is now an admin.` : `${requestUser.name}'s request was rejected.`,
+      });
+    } catch (error) {
+      setFeedback({
+        severity: "error",
+        message: error instanceof Error ? error.message : "Unable to update admin request.",
+      });
+    } finally {
+      setResolvingAdminRequestId(null);
+    }
+  };
+
+  const handleResolvePermissionRequest = async (requestUser: AuthUser, status: "approved" | "rejected") => {
+    setResolvingPermissionRequestId(requestUser._id);
+    try {
+      await resolvePermissionRequest(requestUser._id, status);
+      setPermissionRequests((currentRequests) => currentRequests.filter((currentUser) => currentUser._id !== requestUser._id));
+      setFeedback({
+        severity: "success",
+        message: status === "approved" ? `${requestUser.name} is now a blogger.` : `${requestUser.name}'s blogger request was rejected.`,
+      });
+      void loadAdminData();
+    } catch (error) {
+      setFeedback({
+        severity: "error",
+        message: error instanceof Error ? error.message : "Unable to update blogger request.",
+      });
+    } finally {
+      setResolvingPermissionRequestId(null);
+    }
+  };
+
+  const handleDeleteUser = async (targetUser: AuthUser) => {
+    setDeletingId(targetUser._id);
+    try {
+      await deleteUser(targetUser._id);
+      setUsers((currentUsers) => currentUsers.filter((currentUser) => currentUser._id !== targetUser._id));
+      setFeedback({ severity: "success", message: `${targetUser.name} was deleted.` });
+    } catch (error) {
+      setFeedback({
+        severity: "error",
+        message: error instanceof Error ? error.message : "Unable to delete user.",
+      });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    navigate("/login", { replace: true });
+  };
+
   return (
     <Box
       sx={{
@@ -1788,7 +1965,7 @@ const AdminScreen: React.FC = () => {
               pb: { xs: 0.25, md: 0 },
             }}
           >
-            {navItems.map((item) => {
+            {visibleNavItems.map((item) => {
               const isActive = activeView === item.id;
 
               return (
@@ -1819,6 +1996,12 @@ const AdminScreen: React.FC = () => {
 
           <Box sx={{ mt: "auto", display: { xs: "none", md: "block" } }}>
             <Typography sx={{ color: "#9da4af", fontSize: 13 }}>
+              Signed in
+            </Typography>
+            <Typography sx={{ color: "#fff", fontSize: 13, wordBreak: "break-word", mb: 1.5 }}>
+              {user?.name || "Admin"}
+            </Typography>
+            <Typography sx={{ color: "#9da4af", fontSize: 13 }}>
               API base
             </Typography>
             <Typography sx={{ color: "#fff", fontSize: 13, wordBreak: "break-word" }}>
@@ -1848,19 +2031,34 @@ const AdminScreen: React.FC = () => {
               </Typography>
             </Box>
 
-            <Button
-              onClick={loadAdminData}
-              variant="outlined"
-              sx={{
-                borderColor: "#caa64a",
-                color: "#6f5517",
-                textTransform: "none",
-                fontWeight: 800,
-                bgcolor: "#fff",
-              }}
-            >
-              Refresh data
-            </Button>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ width: { xs: "100%", sm: "auto" } }}>
+              <Button
+                onClick={loadAdminData}
+                variant="outlined"
+                sx={{
+                  borderColor: "#caa64a",
+                  color: "#6f5517",
+                  textTransform: "none",
+                  fontWeight: 800,
+                  bgcolor: "#fff",
+                }}
+              >
+                Refresh data
+              </Button>
+              <Button
+                onClick={() => void handleLogout()}
+                startIcon={<Logout />}
+                sx={{
+                  bgcolor: "#111318",
+                  color: "#fff",
+                  textTransform: "none",
+                  fontWeight: 800,
+                  "&:hover": { bgcolor: "#2a2f38" },
+                }}
+              >
+                Logout
+              </Button>
+            </Stack>
           </Box>
 
           {isLoading ? (
@@ -1885,6 +2083,7 @@ const AdminScreen: React.FC = () => {
                 { label: "Testimonies", value: testimonies.length, icon: <AutoStories /> },
                 { label: "Interviews", value: interviews.length, icon: <Article /> },
                 { label: "Gallery photos", value: galleryPhotos.length, icon: <PhotoLibrary /> },
+                { label: "Admin requests", value: adminRequests.length, icon: <AdminPanelSettings /> },
                 { label: "Contact messages", value: messages.length, icon: <Mail /> },
               ].map((item) => (
                 <Paper key={item.label} elevation={0} sx={{ p: 2.25, border: "1px solid #e6e8ec", borderRadius: 2 }}>
@@ -1919,7 +2118,7 @@ const AdminScreen: React.FC = () => {
               alignItems: "start",
             }}
           >
-            {activeView === "posts" && (
+            {activeView === "posts" && can("posts:create") && (
             <Paper
               ref={postFormRef}
               component="form"
@@ -2006,7 +2205,7 @@ const AdminScreen: React.FC = () => {
             </Paper>
             )}
 
-            {activeView === "news" && (
+            {activeView === "news" && can("news:create") && (
             <Paper
               ref={newsFormRef}
               component="form"
@@ -2167,7 +2366,7 @@ const AdminScreen: React.FC = () => {
             </Paper>
             )}
 
-            {activeView === "events" && (
+            {activeView === "events" && can("events:create") && (
             <Paper
               ref={eventFormRef}
               component="form"
@@ -2375,7 +2574,7 @@ const AdminScreen: React.FC = () => {
             </Paper>
             )}
 
-            {activeView === "pastEditions" && (
+            {activeView === "pastEditions" && can("pastEditions:create") && (
             <Paper
               ref={pastEditionFormRef}
               component="form"
@@ -2458,7 +2657,7 @@ const AdminScreen: React.FC = () => {
             </Paper>
             )}
 
-            {activeView === "testimonies" && (
+            {activeView === "testimonies" && can("testimonies:create") && (
             <Paper
               ref={testimonyFormRef}
               component="form"
@@ -2538,7 +2737,7 @@ const AdminScreen: React.FC = () => {
             </Paper>
             )}
 
-            {activeView === "interviews" && (
+            {activeView === "interviews" && can("interviews:create") && (
             <Paper
               ref={interviewFormRef}
               component="form"
@@ -2675,7 +2874,7 @@ const AdminScreen: React.FC = () => {
             </Paper>
             )}
 
-            {activeView === "photoGallery" && (
+            {activeView === "photoGallery" && can("photoGallery:create") && (
             <Paper
               ref={photoGalleryFormRef}
               component="form"
@@ -2859,7 +3058,7 @@ const AdminScreen: React.FC = () => {
                     >
                       Share
                     </Button>
-                    <Button
+                    {can("posts:update") && <Button
                       onClick={() => handleOpenEdit({ kind: "post", item: post })}
                       startIcon={<Edit />}
                       size="small"
@@ -2875,8 +3074,8 @@ const AdminScreen: React.FC = () => {
                       }}
                     >
                       Edit
-                    </Button>
-                    <Button
+                    </Button>}
+                    {can("posts:delete") && <Button
                       onClick={() => setPendingDelete({ kind: "post", item: post })}
                       disabled={deletingId === post._id}
                       startIcon={<Delete />}
@@ -2893,7 +3092,7 @@ const AdminScreen: React.FC = () => {
                       }}
                     >
                       Delete
-                    </Button>
+                    </Button>}
                   </Box>
                 ))}
 
@@ -3007,7 +3206,7 @@ const AdminScreen: React.FC = () => {
                     >
                       Share
                     </Button>
-                    <Button
+                    {can("news:update") && <Button
                       onClick={() => handleOpenEdit({ kind: "news", item: newsItem })}
                       startIcon={<Edit />}
                       size="small"
@@ -3023,8 +3222,8 @@ const AdminScreen: React.FC = () => {
                       }}
                     >
                       Edit
-                    </Button>
-                    <Button
+                    </Button>}
+                    {can("news:delete") && <Button
                       onClick={() => setPendingDelete({ kind: "news", item: newsItem })}
                       disabled={deletingId === newsItem._id}
                       startIcon={<Delete />}
@@ -3041,7 +3240,7 @@ const AdminScreen: React.FC = () => {
                       }}
                     >
                       Delete
-                    </Button>
+                    </Button>}
                   </Box>
                 ))}
 
@@ -3201,7 +3400,7 @@ const AdminScreen: React.FC = () => {
                       >
                         <Share fontSize="small" />
                       </IconButton>
-                      <IconButton
+                      {can("events:update") && <IconButton
                         aria-label={`Edit ${event.title}`}
                         onClick={() => handleOpenEdit({ kind: "event", item: event })}
                         sx={{
@@ -3213,8 +3412,8 @@ const AdminScreen: React.FC = () => {
                         }}
                       >
                         <Edit fontSize="small" />
-                      </IconButton>
-                      <IconButton
+                      </IconButton>}
+                      {can("events:delete") && <IconButton
                         aria-label={`Delete ${event.title}`}
                         onClick={() => setPendingDelete({ kind: "event", item: event })}
                         disabled={deletingId === eventId}
@@ -3227,7 +3426,7 @@ const AdminScreen: React.FC = () => {
                         }}
                       >
                         <Delete fontSize="small" />
-                      </IconButton>
+                      </IconButton>}
                     </Box>
                   );
                 })}
@@ -3298,7 +3497,7 @@ const AdminScreen: React.FC = () => {
                       decoding="async"
                       sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                     />
-                    <IconButton
+                    {can("pastEditions:delete") && <IconButton
                       aria-label="Delete past edition image"
                       onClick={() => setPendingDelete({ kind: "pastEdition", item: edition })}
                       disabled={deletingId === edition._id}
@@ -3313,7 +3512,7 @@ const AdminScreen: React.FC = () => {
                       }}
                     >
                       <Delete fontSize="small" />
-                    </IconButton>
+                    </IconButton>}
                   </Box>
                 ))}
               </Box>
@@ -3372,7 +3571,7 @@ const AdminScreen: React.FC = () => {
                       spacing={1}
                       sx={{ gridColumn: { xs: "1 / -1", sm: "auto" }, justifySelf: { xs: "stretch", sm: "end" } }}
                     >
-                      <Button
+                      {can("testimonies:update") && <Button
                         onClick={() => handleOpenEdit({ kind: "testimony", item: testimony })}
                         startIcon={<Edit />}
                         size="small"
@@ -3386,8 +3585,8 @@ const AdminScreen: React.FC = () => {
                         }}
                       >
                         Edit
-                      </Button>
-                      <Button
+                      </Button>}
+                      {can("testimonies:delete") && <Button
                         onClick={() => setPendingDelete({ kind: "testimony", item: testimony })}
                         disabled={deletingId === testimony._id}
                         startIcon={<Delete />}
@@ -3402,7 +3601,7 @@ const AdminScreen: React.FC = () => {
                         }}
                       >
                         Delete
-                      </Button>
+                      </Button>}
                     </Stack>
                   </Box>
                 ))}
@@ -3462,7 +3661,7 @@ const AdminScreen: React.FC = () => {
                       spacing={1}
                       sx={{ gridColumn: { xs: "1 / -1", sm: "auto" }, justifySelf: { xs: "stretch", sm: "end" } }}
                     >
-                      <Button
+                      {can("interviews:update") && <Button
                         onClick={() => handleOpenEdit({ kind: "interview", item: interview })}
                         startIcon={<Edit />}
                         size="small"
@@ -3476,8 +3675,8 @@ const AdminScreen: React.FC = () => {
                         }}
                       >
                         Edit
-                      </Button>
-                      <Button
+                      </Button>}
+                      {can("interviews:delete") && <Button
                         onClick={() => setPendingDelete({ kind: "interview", item: interview })}
                         disabled={deletingId === interview._id}
                         startIcon={<Delete />}
@@ -3492,7 +3691,7 @@ const AdminScreen: React.FC = () => {
                         }}
                       >
                         Delete
-                      </Button>
+                      </Button>}
                     </Stack>
                   </Box>
                 ))}
@@ -3548,7 +3747,7 @@ const AdminScreen: React.FC = () => {
                       decoding="async"
                       sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                     />
-                    <IconButton
+                    {can("photoGallery:delete") && <IconButton
                       aria-label="Delete gallery image"
                       onClick={() => setPendingDelete({ kind: "galleryPhoto", item: photo })}
                       disabled={deletingId === photo._id}
@@ -3563,7 +3762,7 @@ const AdminScreen: React.FC = () => {
                       }}
                     >
                       <Delete fontSize="small" />
-                    </IconButton>
+                    </IconButton>}
                   </Box>
                 ))}
               </Box>
@@ -3571,6 +3770,157 @@ const AdminScreen: React.FC = () => {
               {!galleryPhotos.length && !isLoading && (
                 <Typography sx={{ color: "#667085" }}>No gallery images returned from the API yet.</Typography>
               )}
+            </Paper>
+            )}
+
+            {activeView === "adminRequests" && (
+            <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid #e6e8ec", borderRadius: 2 }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: { xs: "flex-start", md: "center" },
+                  justifyContent: "space-between",
+                  gap: 2,
+                  flexDirection: { xs: "column", md: "row" },
+                  mb: 2,
+                }}
+              >
+                <Typography variant="h6" sx={{ fontWeight: 900 }}>
+                  Pending Admin Requests
+                </Typography>
+                <Chip
+                  size="small"
+                  label={`${adminRequests.length} pending`}
+                  sx={{ bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 900 }}
+                />
+              </Box>
+
+              <Stack spacing={1.5}>
+                {adminRequests.map((requestUser) => (
+                  <Box
+                    key={requestUser._id}
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) auto" },
+                      gap: 1.5,
+                      alignItems: "center",
+                      border: "1px solid #edf0f2",
+                      borderRadius: 1.5,
+                      p: { xs: 1.5, md: 2 },
+                      bgcolor: "#fff",
+                    }}
+                  >
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography sx={{ fontWeight: 900, color: "#171a20", overflowWrap: "anywhere" }}>
+                        {requestUser.name}
+                      </Typography>
+                      <Typography sx={{ color: "#667085", fontSize: 13, overflowWrap: "anywhere" }}>
+                        {requestUser.email} - {requestUser.phonenumber}
+                      </Typography>
+                    </Box>
+                    <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                      <Button
+                        onClick={() => void handleResolveAdminRequest(requestUser, "approved")}
+                        disabled={resolvingAdminRequestId === requestUser._id}
+                        sx={{
+                          bgcolor: "#12372A",
+                          color: "#fff",
+                          textTransform: "none",
+                          fontWeight: 900,
+                          "&:hover": { bgcolor: "#0b241b" },
+                        }}
+                      >
+                        Approve
+                      </Button>
+                      <Button
+                        onClick={() => void handleResolveAdminRequest(requestUser, "rejected")}
+                        disabled={resolvingAdminRequestId === requestUser._id}
+                        sx={{
+                          color: "#b42318",
+                          border: "1px solid #fda29b",
+                          bgcolor: "#fff",
+                          textTransform: "none",
+                          fontWeight: 900,
+                          "&:hover": { bgcolor: "#fff1f3", borderColor: "#f97066" },
+                        }}
+                      >
+                        Reject
+                      </Button>
+                    </Stack>
+                  </Box>
+                ))}
+
+                {!adminRequests.length && !isLoading && (
+                  <Typography sx={{ color: "#667085" }}>No pending admin requests.</Typography>
+                )}
+              </Stack>
+            </Paper>
+            )}
+
+            {activeView === "permissionRequests" && (
+            <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid #e6e8ec", borderRadius: 2 }}>
+              <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2, mb: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 900 }}>Pending Blogger Requests</Typography>
+                <Chip size="small" label={`${permissionRequests.length} pending`} sx={{ bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 900 }} />
+              </Box>
+              <Stack spacing={1.5}>
+                {permissionRequests.map((requestUser) => (
+                  <Box key={requestUser._id} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) auto" }, gap: 1.5, p: 2, border: "1px solid #edf0f2", borderRadius: 1.5 }}>
+                    <Box>
+                      <Typography sx={{ fontWeight: 900 }}>{requestUser.name}</Typography>
+                      <Typography sx={{ color: "#667085", fontSize: 13 }}>{requestUser.email}</Typography>
+                      <Typography sx={{ color: "#667085", fontSize: 13, mt: 0.75 }}>
+                        Requesting full blogger access for all content sections.
+                      </Typography>
+                    </Box>
+                    <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                      <Button onClick={() => void handleResolvePermissionRequest(requestUser, "approved")} disabled={resolvingPermissionRequestId === requestUser._id} sx={{ bgcolor: "#12372A", color: "#fff", textTransform: "none", fontWeight: 900 }}>Approve</Button>
+                      <Button onClick={() => void handleResolvePermissionRequest(requestUser, "rejected")} disabled={resolvingPermissionRequestId === requestUser._id} sx={{ color: "#b42318", border: "1px solid #fda29b", textTransform: "none", fontWeight: 900 }}>Reject</Button>
+                    </Stack>
+                  </Box>
+                ))}
+                {!permissionRequests.length && !isLoading && <Typography sx={{ color: "#667085" }}>No pending blogger requests.</Typography>}
+              </Stack>
+            </Paper>
+            )}
+
+            {activeView === "users" && (
+            <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid #e6e8ec", borderRadius: 2 }}>
+              <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2, mb: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 900 }}>Users</Typography>
+                <Chip size="small" label={`${users.length} total`} sx={{ bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 900 }} />
+              </Box>
+              <Stack spacing={1.5}>
+                {users.map((account) => (
+                  <Box key={account._id} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) auto" }, gap: 1.5, p: 2, border: "1px solid #edf0f2", borderRadius: 1.5 }}>
+                    <Box>
+                      <Typography sx={{ fontWeight: 900 }}>{account.name}</Typography>
+                      <Typography sx={{ color: "#667085", fontSize: 13 }}>{account.email} - {account.phonenumber}</Typography>
+                      <Typography sx={{ color: "#667085", fontSize: 13 }}>Role: {account.role}</Typography>
+                    </Box>
+                    <Button onClick={() => void handleDeleteUser(account)} disabled={account._id === user?._id || deletingId === account._id} startIcon={<Delete />} sx={{ color: "#b42318", border: "1px solid #fda29b", textTransform: "none", fontWeight: 900 }}>Delete user</Button>
+                  </Box>
+                ))}
+              </Stack>
+            </Paper>
+            )}
+
+            {activeView === "activity" && (
+            <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid #e6e8ec", borderRadius: 2 }}>
+              <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2, mb: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 900 }}>Activity Log</Typography>
+                <Chip size="small" label={`${auditLogs.length} events`} sx={{ bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 900 }} />
+              </Box>
+              <Stack spacing={1.25}>
+                {auditLogs.map((log) => (
+                  <Box key={log._id} sx={{ p: 1.5, border: "1px solid #edf0f2", borderRadius: 1.5 }}>
+                    <Typography sx={{ fontWeight: 900 }}>{log.action} / {log.resource}</Typography>
+                    <Typography sx={{ color: "#667085", fontSize: 13 }}>{log.actorName || "System"} - {log.actorEmail || "no email"} - {formatDate(log.createdAt)}</Typography>
+                    <Typography sx={{ color: "#98a2b3", fontSize: 12 }}>{log.method} {log.path}</Typography>
+                  </Box>
+                ))}
+                {!auditLogs.length && !isLoading && <Typography sx={{ color: "#667085" }}>No activity recorded yet.</Typography>}
+              </Stack>
             </Paper>
             )}
 
