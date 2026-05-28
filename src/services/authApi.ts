@@ -206,6 +206,13 @@ export const deleteUser = (userId: string) =>
     "Unable to delete user."
   );
 
+export const updateUserRole = (userId: string, role: "user" | "blogger") =>
+  authRequest<{ user: AuthUser }>(
+    `/users/${userId}/role`,
+    { method: "PATCH", body: JSON.stringify({ role }) },
+    "Unable to update user role."
+  ).then(normalizeUserResponse);
+
 export const loadAuditLogs = () =>
   authRequest<AuditLog[]>("/audit-logs", undefined, "Unable to load audit logs.");
 

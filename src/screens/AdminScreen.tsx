@@ -64,6 +64,7 @@ import {
   deleteUser,
   resolveAdminRequest,
   resolvePermissionRequest,
+  updateUserRole,
 } from "../services/authApi";
 import type { AuditLog, AuthUser, Permission } from "../services/authApi";
 
@@ -1888,6 +1889,31 @@ const AdminScreen: React.FC = () => {
       });
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const handleUpdateUserRole = async (targetUser: AuthUser, role: "user" | "blogger") => {
+    setResolvingPermissionRequestId(targetUser._id);
+    try {
+      const result = await updateUserRole(targetUser._id, role);
+      setUsers((currentUsers) =>
+        currentUsers.map((currentUser) => (currentUser._id === targetUser._id ? result.user : currentUser))
+      );
+      setPermissionRequests((currentRequests) =>
+        currentRequests.filter((currentUser) => currentUser._id !== targetUser._id)
+      );
+      setFeedback({
+        severity: "success",
+        message: role === "blogger" ? `${targetUser.name} is now a blogger.` : `${targetUser.name} is now a user.`,
+      });
+      void loadAdminData();
+    } catch (error) {
+      setFeedback({
+        severity: "error",
+        message: error instanceof Error ? error.message : "Unable to update user role.",
+      });
+    } finally {
+      setResolvingPermissionRequestId(null);
     }
   };
 
@@ -3898,7 +3924,27 @@ const AdminScreen: React.FC = () => {
                       <Typography sx={{ color: "#667085", fontSize: 13 }}>{account.email} - {account.phonenumber}</Typography>
                       <Typography sx={{ color: "#667085", fontSize: 13 }}>Role: {account.role}</Typography>
                     </Box>
-                    <Button onClick={() => void handleDeleteUser(account)} disabled={account._id === user?._id || deletingId === account._id} startIcon={<Delete />} sx={{ color: "#b42318", border: "1px solid #fda29b", textTransform: "none", fontWeight: 900 }}>Delete user</Button>
+                    <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                      {account.role === "user" && (
+                        <Button
+                          onClick={() => void handleUpdateUserRole(account, "blogger")}
+                          disabled={resolvingPermissionRequestId === account._id}
+                          sx={{ bgcolor: "#12372A", color: "#fff", textTransform: "none", fontWeight: 900 }}
+                        >
+                          Upgrade to blogger
+                        </Button>
+                      )}
+                      {account.role === "blogger" && (
+                        <Button
+                          onClick={() => void handleUpdateUserRole(account, "user")}
+                          disabled={resolvingPermissionRequestId === account._id}
+                          sx={{ color: "#6f5517", border: "1px solid #caa64a", textTransform: "none", fontWeight: 900 }}
+                        >
+                          Downgrade to user
+                        </Button>
+                      )}
+                      <Button onClick={() => void handleDeleteUser(account)} disabled={account._id === user?._id || deletingId === account._id} startIcon={<Delete />} sx={{ color: "#b42318", border: "1px solid #fda29b", textTransform: "none", fontWeight: 900 }}>Delete user</Button>
+                    </Stack>
                   </Box>
                 ))}
               </Stack>
