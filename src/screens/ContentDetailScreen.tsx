@@ -6,12 +6,16 @@ import {
   Chip,
   Container,
   Divider,
+  IconButton,
   Paper,
+  TextField,
   Typography,
 } from "@mui/material";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
+import FavoriteBorderIcon from "@mui/icons-material/FavoriteBorder";
+import FavoriteIcon from "@mui/icons-material/Favorite";
 import LocalDiningIcon from "@mui/icons-material/LocalDining";
 import PersonIcon from "@mui/icons-material/Person";
 import ShareIcon from "@mui/icons-material/Share";
@@ -25,11 +29,17 @@ import {
   loadNewsById,
   loadPosts,
   loadPostById,
+  loadStoryComments,
+  addStoryComment,
+  toggleStoryCommentLike,
+  loadStoryReaders,
+  incrementStoryReaders,
   loadUpcomingEvents,
   loadUpcomingEventById,
   type EventItem,
   type NewsItem,
   type PostItem,
+  type StoryComment,
 } from "../services/contentApi";
 
 const gold = "#A67C1B";
@@ -229,6 +239,14 @@ const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
   const [error, setError] = useState("");
   const [shareMessage, setShareMessage] = useState("");
   const [relatedItems, setRelatedItems] = useState<RelatedItem[]>([]);
+  const [comments, setComments] = useState<StoryComment[]>([]);
+  const [commentName, setCommentName] = useState("");
+  const [commentMessage, setCommentMessage] = useState("");
+  const [commentError, setCommentError] = useState("");
+  const [commentFeedback, setCommentFeedback] = useState("");
+  const [submittingComment, setSubmittingComment] = useState(false);
+  const [likedCommentIds, setLikedCommentIds] = useState<Record<string, boolean>>({});
+  const [readersCount, setReadersCount] = useState(0);
 
   const backPath = useMemo(() => backPathByKind(kind), [kind]);
 
@@ -285,6 +303,39 @@ const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
 
     void loadDetail();
 
+    return () => {
+      mounted = false;
+    };
+  }, [id, kind]);
+
+  useEffect(() => {
+    if (!id) return;
+    let mounted = true;
+    const loadEngagement = async () => {
+      try {
+        const [loadedComments, readerState] = await Promise.all([
+          loadStoryComments(kind, id),
+          loadStoryReaders(kind, id),
+        ]);
+        if (!mounted) return;
+        setComments(loadedComments);
+        setReadersCount(readerState.readers || 0);
+      } catch {
+        if (mounted) {
+          setComments([]);
+          setReadersCount(0);
+        }
+      }
+
+      try {
+        const next = await incrementStoryReaders(kind, id);
+        if (mounted) setReadersCount(next.readers || 0);
+      } catch {
+        // no-op
+      }
+    };
+
+    void loadEngagement();
     return () => {
       mounted = false;
     };
@@ -353,6 +404,46 @@ const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
       }
 
       setShareMessage("Unable to share this link.");
+    }
+  };
+
+  const handleSubmitComment = async () => {
+    if (!id) return;
+    const name = commentName.trim();
+    const message = commentMessage.trim();
+    if (!name || !message) {
+      setCommentError("Enter your name and comment before posting.");
+      return;
+    }
+
+    setCommentError("");
+    setSubmittingComment(true);
+    setCommentFeedback("");
+    try {
+      const created = await addStoryComment(kind, id, name, message);
+      setComments((prev) => [created, ...prev]);
+      setCommentMessage("");
+      setCommentFeedback("Comment posted.");
+    } catch (error) {
+      setCommentError(error instanceof Error ? error.message : "Unable to post comment.");
+    } finally {
+      setSubmittingComment(false);
+    }
+  };
+
+  const handleToggleLike = async (commentId: string) => {
+    const wasLiked = likedCommentIds[commentId];
+    if (wasLiked) {
+      setLikedCommentIds((prev) => ({ ...prev, [commentId]: false }));
+      setComments((prev) => prev.map((item) => (item._id === commentId ? { ...item, likes: Math.max(0, item.likes - 1) } : item)));
+      return;
+    }
+    setLikedCommentIds((prev) => ({ ...prev, [commentId]: true }));
+    try {
+      const updated = await toggleStoryCommentLike(commentId);
+      setComments((prev) => prev.map((item) => (item._id === commentId ? { ...item, likes: updated.likes } : item)));
+    } catch {
+      setComments((prev) => prev.map((item) => (item._id === commentId ? { ...item, likes: item.likes + 1 } : item)));
     }
   };
 
@@ -566,6 +657,7 @@ const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
                   {[
                     { icon: <CalendarTodayIcon fontSize="small" />, label: "Published", value: formatDate(item.createdAt) },
                     { icon: <AccessTimeIcon fontSize="small" />, label: "Reading time", value: getReadingTime(item.body) },
+                    { icon: <PersonIcon fontSize="small" />, label: "Readers", value: String(readersCount) },
                     { icon: <PersonIcon fontSize="small" />, label: "Source", value: "Reality Life Magazine" },
                   ].map((detail, index) => (
                     <Box key={detail.label}>
@@ -688,6 +780,66 @@ const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
                 </Box>
               </Paper>
             </Box>
+
+            <Paper
+              elevation={0}
+              sx={{
+                mt: { xs: 3, md: 4 },
+                p: { xs: 2.5, md: 3 },
+                borderRadius: 2,
+                bgcolor: "#0f1116",
+                border: "1px solid rgba(255,255,255,0.12)",
+                color: ivory,
+              }}
+            >
+              <Typography sx={{ fontWeight: 900, fontSize: 22, mb: 2 }}>Community comments</Typography>
+              <Box sx={{ display: "grid", gap: 1.5, mb: 2 }}>
+                <TextField
+                  size="small"
+                  label="Your name"
+                  value={commentName}
+                  onChange={(event) => setCommentName(event.target.value)}
+                  fullWidth
+                  sx={{ "& .MuiOutlinedInput-root": { bgcolor: "#151922", color: "#fff" }, "& .MuiInputLabel-root": { color: "#c8cfdb" } }}
+                />
+                <TextField
+                  size="small"
+                  label="Write a comment"
+                  value={commentMessage}
+                  onChange={(event) => setCommentMessage(event.target.value)}
+                  multiline
+                  minRows={3}
+                  fullWidth
+                  sx={{ "& .MuiOutlinedInput-root": { bgcolor: "#151922", color: "#fff" }, "& .MuiInputLabel-root": { color: "#c8cfdb" } }}
+                />
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+                  <Typography sx={{ color: commentError ? "#ffb4ab" : "#9da4af", fontSize: 13 }}>
+                    {commentError || commentFeedback || "Comments are visible to readers."}
+                  </Typography>
+                  <Button onClick={handleSubmitComment} disabled={submittingComment} sx={{ bgcolor: "#f1d68a", color: "#171410", textTransform: "none", fontWeight: 900 }}>
+                    {submittingComment ? "Posting..." : "Post comment"}
+                  </Button>
+                </Box>
+              </Box>
+              <Box sx={{ display: "grid", gap: 1.25 }}>
+                {comments.map((comment) => (
+                  <Paper key={comment._id} elevation={0} sx={{ p: 1.75, borderRadius: 1.5, bgcolor: "#151922", border: "1px solid rgba(255,255,255,0.1)" }}>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1, alignItems: "center" }}>
+                      <Typography sx={{ fontWeight: 900 }}>{comment.name}</Typography>
+                      <Typography sx={{ color: "#9da4af", fontSize: 12 }}>{formatDate(comment.createdAt)}</Typography>
+                    </Box>
+                    <Typography sx={{ color: "#d8dde5", lineHeight: 1.65, mt: 0.8 }}>{comment.message}</Typography>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.4, mt: 1 }}>
+                      <IconButton size="small" onClick={() => void handleToggleLike(comment._id)} sx={{ color: likedCommentIds[comment._id] ? "#ff5f7a" : "#9da4af" }}>
+                        {likedCommentIds[comment._id] ? <FavoriteIcon fontSize="small" /> : <FavoriteBorderIcon fontSize="small" />}
+                      </IconButton>
+                      <Typography sx={{ color: "#c8cfdb", fontSize: 13, fontWeight: 700 }}>{comment.likes || 0}</Typography>
+                    </Box>
+                  </Paper>
+                ))}
+                {!comments.length && <Typography sx={{ color: "#9da4af", fontSize: 14 }}>No comments yet.</Typography>}
+              </Box>
+            </Paper>
 
             {relatedItems.length > 0 && (
               <Box sx={{ mt: { xs: 5, md: 7 } }}>

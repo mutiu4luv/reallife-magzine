@@ -60,7 +60,11 @@ const ensureDatabase = async () => {
   } catch {
     await fs.writeFile(
       DB_PATH,
-      JSON.stringify({ posts: [], news: [], upcomingEvents: [], contactMessages: [], pastEditions: [] }, null, 2)
+      JSON.stringify(
+        { posts: [], news: [], upcomingEvents: [], contactMessages: [], pastEditions: [], comments: [], readers: {} },
+        null,
+        2
+      )
     );
   }
 };
@@ -76,6 +80,8 @@ const readDatabase = async () => {
     upcomingEvents: Array.isArray(data.upcomingEvents) ? data.upcomingEvents : [],
     contactMessages: Array.isArray(data.contactMessages) ? data.contactMessages : [],
     pastEditions: Array.isArray(data.pastEditions) ? data.pastEditions : [],
+    comments: Array.isArray(data.comments) ? data.comments : [],
+    readers: data.readers && typeof data.readers === "object" ? data.readers : {},
   };
 };
 
@@ -116,6 +122,13 @@ const findById = (items, id) => items.find((item) => matchesId(item, id));
 const notFound = (res, message) => {
   res.status(404).json({ message });
 };
+
+const normalizeContentType = (value) => {
+  const type = String(value || "").trim().toLowerCase();
+  return type === "post" || type === "news" || type === "event" ? type : "";
+};
+
+const getStoryKey = (contentType, contentId) => `${contentType}:${contentId}`;
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
@@ -392,6 +405,99 @@ app.delete("/api/past-editions/:id", async (req, res, next) => {
     db.pastEditions = nextItems;
     await writeDatabase(db);
     res.json({ message: "Past edition image deleted successfully." });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/comments", async (req, res, next) => {
+  try {
+    const contentType = normalizeContentType(req.query.contentType);
+    const contentId = String(req.query.contentId || "").trim();
+    const db = await readDatabase();
+    const comments = db.comments
+      .filter((item) => (!contentType || item.contentType === contentType) && (!contentId || item.contentId === contentId))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    res.json(comments);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/comments", async (req, res, next) => {
+  try {
+    const contentType = normalizeContentType(req.body.contentType);
+    const contentId = String(req.body.contentId || "").trim();
+    const name = String(req.body.name || "").trim();
+    const message = String(req.body.message || "").trim();
+
+    if (!contentType || !contentId || !name || !message) {
+      res.status(400).json({ message: "contentType, contentId, name, and message are required." });
+      return;
+    }
+
+    const db = await readDatabase();
+    const comment = createRecord({
+      contentType,
+      contentId,
+      name,
+      message,
+      likes: 0,
+    });
+    db.comments.unshift(comment);
+    await writeDatabase(db);
+    res.status(201).json(comment);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/comments/:id/like", async (req, res, next) => {
+  try {
+    const db = await readDatabase();
+    const comment = findById(db.comments, req.params.id);
+    if (!comment) {
+      notFound(res, "Comment not found.");
+      return;
+    }
+    comment.likes = Number(comment.likes || 0) + 1;
+    await writeDatabase(db);
+    res.json(comment);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/readers/:contentType/:contentId", async (req, res, next) => {
+  try {
+    const contentType = normalizeContentType(req.params.contentType);
+    const contentId = String(req.params.contentId || "").trim();
+    if (!contentType || !contentId) {
+      res.status(400).json({ message: "Valid content type and content id are required." });
+      return;
+    }
+    const db = await readDatabase();
+    const key = getStoryKey(contentType, contentId);
+    res.json({ contentType, contentId, readers: Number(db.readers[key] || 0) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/readers/:contentType/:contentId/increment", async (req, res, next) => {
+  try {
+    const contentType = normalizeContentType(req.params.contentType);
+    const contentId = String(req.params.contentId || "").trim();
+    if (!contentType || !contentId) {
+      res.status(400).json({ message: "Valid content type and content id are required." });
+      return;
+    }
+    const db = await readDatabase();
+    const key = getStoryKey(contentType, contentId);
+    const nextCount = Number(db.readers[key] || 0) + 1;
+    db.readers[key] = nextCount;
+    await writeDatabase(db);
+    res.json({ contentType, contentId, readers: nextCount });
   } catch (error) {
     next(error);
   }

@@ -639,6 +639,7 @@ const AdminScreen: React.FC = () => {
   const [activitySearch, setActivitySearch] = useState("");
   const [activityDate, setActivityDate] = useState("");
   const [activityTime, setActivityTime] = useState("");
+  const [dashboardActivityDate, setDashboardActivityDate] = useState("");
   const [postPage, setPostPage] = useState(1);
   const [newsPage, setNewsPage] = useState(1);
   const [eventPage, setEventPage] = useState(1);
@@ -711,6 +712,40 @@ const AdminScreen: React.FC = () => {
     () => paginateItems(filteredActivityLogs, safeActivityPage),
     [filteredActivityLogs, safeActivityPage]
   );
+  const activityDays = useMemo(() => {
+    const days = new Set<string>();
+    auditLogs.forEach((log) => {
+      if (!log.createdAt) return;
+      const parsed = new Date(log.createdAt);
+      if (Number.isNaN(parsed.getTime())) return;
+      days.add(parsed.toISOString().slice(0, 10));
+    });
+    return Array.from(days).sort((a, b) => b.localeCompare(a));
+  }, [auditLogs]);
+  const selectedDashboardDate =
+    dashboardActivityDate && activityDays.includes(dashboardActivityDate)
+      ? dashboardActivityDate
+      : activityDays[0] || "";
+  const activeDashboardDay = selectedDashboardDate;
+  const dashboardDayLogs = useMemo(() => {
+    if (!activeDashboardDay) return [];
+    return auditLogs.filter((log) => {
+      if (!log.createdAt) return false;
+      const parsed = new Date(log.createdAt);
+      if (Number.isNaN(parsed.getTime())) return false;
+      return parsed.toISOString().slice(0, 10) === activeDashboardDay;
+    });
+  }, [activeDashboardDay, auditLogs]);
+  const dashboardActionSummary = useMemo(() => {
+    const counts = new Map<string, number>();
+    dashboardDayLogs.forEach((log) => {
+      const label = `${log.action} ${log.resource}`.replaceAll("_", " ").trim();
+      counts.set(label, (counts.get(label) || 0) + 1);
+    });
+    return Array.from(counts.entries())
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  }, [dashboardDayLogs]);
   const currentView = viewCopy[activeView];
   const isOwnerAdmin = user?.role === "admin";
   const can = useCallback((permission: Permission) => hasPermission(user, permission), [user]);
@@ -2605,41 +2640,74 @@ const AdminScreen: React.FC = () => {
           ) : (
             <>
           {activeView === "dashboard" && (
-            <Box
-              sx={{
-                display: "grid",
-                gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", xl: "repeat(4, 1fr)" },
-                gap: 2,
-              }}
-            >
-              {[
-                { label: "Published blogs", value: posts.length, icon: <Article /> },
-                { label: "News", value: news.length, icon: <Article /> },
-                { label: "Magazines", value: magazines, icon: <LibraryBooks /> },
-                { label: "Books", value: books, icon: <AutoStories /> },
-                { label: "Active events", value: activeEvents, icon: <ToggleOn /> },
-                { label: "Past edition images", value: pastEditions.length, icon: <PhotoLibrary /> },
-                { label: "Testimonies", value: testimonies.length, icon: <AutoStories /> },
-                { label: "Interviews", value: interviews.length, icon: <Article /> },
-                { label: "Gallery photos", value: galleryPhotos.length, icon: <PhotoLibrary /> },
-                { label: "Admin requests", value: adminRequests.length, icon: <AdminPanelSettings /> },
-                { label: "Contact messages", value: messages.length, icon: <Mail /> },
-              ].map((item) => (
-                <Paper key={item.label} elevation={0} sx={{ p: 2.25, border: "1px solid #e6e8ec", borderRadius: 2 }}>
-                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 2 }}>
-                    <Box>
-                      <Typography sx={{ color: "#667085", fontSize: 14, fontWeight: 700 }}>
-                        {item.label}
-                      </Typography>
-                      <Typography sx={{ color: "#171a20", fontSize: 32, lineHeight: 1.1, fontWeight: 900 }}>
-                        {item.value}
-                      </Typography>
+            <Stack spacing={2}>
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", xl: "repeat(4, 1fr)" },
+                  gap: 2,
+                }}
+              >
+                {[
+                  { label: "Published blogs", value: posts.length, icon: <Article /> },
+                  { label: "News", value: news.length, icon: <Article /> },
+                  { label: "Magazines", value: magazines, icon: <LibraryBooks /> },
+                  { label: "Books", value: books, icon: <AutoStories /> },
+                  { label: "Active events", value: activeEvents, icon: <ToggleOn /> },
+                  { label: "Past edition images", value: pastEditions.length, icon: <PhotoLibrary /> },
+                  { label: "Testimonies", value: testimonies.length, icon: <AutoStories /> },
+                  { label: "Interviews", value: interviews.length, icon: <Article /> },
+                  { label: "Gallery photos", value: galleryPhotos.length, icon: <PhotoLibrary /> },
+                  { label: "Admin requests", value: adminRequests.length, icon: <AdminPanelSettings /> },
+                  { label: "Contact messages", value: messages.length, icon: <Mail /> },
+                ].map((item) => (
+                  <Paper key={item.label} elevation={0} sx={{ p: 2.25, border: "1px solid #e6e8ec", borderRadius: 2 }}>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 2 }}>
+                      <Box>
+                        <Typography sx={{ color: "#667085", fontSize: 14, fontWeight: 700 }}>
+                          {item.label}
+                        </Typography>
+                        <Typography sx={{ color: "#171a20", fontSize: 32, lineHeight: 1.1, fontWeight: 900 }}>
+                          {item.value}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ color: "#caa64a", display: "grid", placeItems: "center" }}>{item.icon}</Box>
                     </Box>
-                    <Box sx={{ color: "#caa64a", display: "grid", placeItems: "center" }}>{item.icon}</Box>
-                  </Box>
-                </Paper>
-              ))}
-            </Box>
+                  </Paper>
+                ))}
+              </Box>
+
+              <Paper elevation={0} sx={{ p: { xs: 2, md: 2.5 }, border: "1px solid #e6e8ec", borderRadius: 2 }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: { xs: "flex-start", md: "center" }, gap: 1.5, flexDirection: { xs: "column", md: "row" }, mb: 1.5 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 900 }}>Daily activity summary</Typography>
+                  <TextField
+                    size="small"
+                    type="date"
+                    value={selectedDashboardDate}
+                    onChange={(event) => setDashboardActivityDate(event.target.value)}
+                    sx={{ width: { xs: "100%", md: 220 } }}
+                  />
+                </Box>
+                {!activeDashboardDay ? (
+                  <Typography sx={{ color: "#667085" }}>No activity log available yet.</Typography>
+                ) : (
+                  <Stack spacing={1.1}>
+                    <Typography sx={{ color: "#667085", fontSize: 14 }}>
+                      {dashboardDayLogs.length} event{dashboardDayLogs.length === 1 ? "" : "s"} on {activeDashboardDay}
+                    </Typography>
+                    {dashboardActionSummary.slice(0, 12).map((row) => (
+                      <Box key={row.label} sx={{ display: "flex", justifyContent: "space-between", gap: 2, p: 1.25, border: "1px solid #edf0f2", borderRadius: 1.25 }}>
+                        <Typography sx={{ fontWeight: 700, textTransform: "capitalize" }}>{row.label}</Typography>
+                        <Chip size="small" label={row.count} sx={{ bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 900 }} />
+                      </Box>
+                    ))}
+                    {!dashboardActionSummary.length && (
+                      <Typography sx={{ color: "#667085" }}>No actions recorded for this day.</Typography>
+                    )}
+                  </Stack>
+                )}
+              </Paper>
+            </Stack>
           )}
 
           {(activeView === "posts" ||
@@ -4754,20 +4822,95 @@ const AdminScreen: React.FC = () => {
 
             {activeView === "activity" && (
             <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid #e6e8ec", borderRadius: 2 }}>
-              <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2, mb: 2 }}>
+              <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2, mb: 2, alignItems: { xs: "flex-start", md: "center" }, flexDirection: { xs: "column", md: "row" } }}>
                 <Typography variant="h6" sx={{ fontWeight: 900 }}>Activity Log</Typography>
-                <Chip size="small" label={`${auditLogs.length} events`} sx={{ bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 900 }} />
+                <Chip size="small" label={`${filteredActivityLogs.length} events`} sx={{ bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 900 }} />
               </Box>
-              <Stack spacing={1.25}>
-                {auditLogs.map((log) => (
-                  <Box key={log._id} sx={{ p: 1.5, border: "1px solid #edf0f2", borderRadius: 1.5 }}>
-                    <Typography sx={{ fontWeight: 900 }}>{log.action} / {log.resource}</Typography>
-                    <Typography sx={{ color: "#667085", fontSize: 13 }}>{log.actorName || "System"} - {log.actorEmail || "no email"} - {formatDate(log.createdAt)}</Typography>
-                    <Typography sx={{ color: "#98a2b3", fontSize: 12 }}>{log.method} {log.path}</Typography>
-                  </Box>
-                ))}
-                {!auditLogs.length && !isLoading && <Typography sx={{ color: "#667085" }}>No activity recorded yet.</Typography>}
-              </Stack>
+
+              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 180px 140px" }, gap: 1.25, mb: 2 }}>
+                <TextField
+                  size="small"
+                  value={activitySearch}
+                  onChange={(event) => {
+                    setActivitySearch(event.target.value);
+                    setActivityPage(1);
+                  }}
+                  placeholder="Search by title, action, user"
+                  slotProps={{
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Search fontSize="small" />
+                        </InputAdornment>
+                      ),
+                    },
+                  }}
+                />
+                <TextField
+                  size="small"
+                  type="date"
+                  value={activityDate}
+                  onChange={(event) => {
+                    setActivityDate(event.target.value);
+                    setActivityPage(1);
+                  }}
+                />
+                <TextField
+                  size="small"
+                  type="time"
+                  value={activityTime}
+                  onChange={(event) => {
+                    setActivityTime(event.target.value);
+                    setActivityPage(1);
+                  }}
+                />
+              </Box>
+
+              {isActivityLoading ? (
+                <Paper
+                  elevation={0}
+                  sx={{
+                    minHeight: 220,
+                    borderRadius: 1.5,
+                    border: "1px solid #e6e8ec",
+                    bgcolor: "#111318",
+                    color: "#fff",
+                    display: "grid",
+                    placeItems: "center",
+                  }}
+                >
+                  <Stack spacing={1.25} sx={{ alignItems: "center" }}>
+                    <CircularProgress size={34} sx={{ color: "#caa64a" }} />
+                    <Typography sx={{ color: "#d8dde5", fontWeight: 800 }}>Loading activity log...</Typography>
+                  </Stack>
+                </Paper>
+              ) : (
+                <Stack spacing={1.25}>
+                  {visibleActivityLogs.map((log) => (
+                    <Box key={log._id} sx={{ p: 1.5, border: "1px solid #edf0f2", borderRadius: 1.5 }}>
+                      <Typography sx={{ fontWeight: 900 }}>
+                        {(log.actorName || "System")} {String(log.action || "").replaceAll("_", " ")} {log.resource}
+                      </Typography>
+                      <Typography sx={{ color: "#667085", fontSize: 13 }}>
+                        Title: {log.metadata?.title || "N/A"}
+                      </Typography>
+                      <Typography sx={{ color: "#667085", fontSize: 13 }}>
+                        {log.actorEmail || "no email"} - {formatDateTime(log.createdAt)}
+                      </Typography>
+                      <Typography sx={{ color: "#98a2b3", fontSize: 12 }}>{log.method} {log.path}</Typography>
+                    </Box>
+                  ))}
+                  {!filteredActivityLogs.length && !isLoading && <Typography sx={{ color: "#667085" }}>No activity recorded for this filter.</Typography>}
+                  {filteredActivityLogs.length > ADMIN_PAGE_SIZE && (
+                    <Pagination
+                      count={activityPageCount}
+                      page={safeActivityPage}
+                      onChange={(_, page) => setActivityPage(page)}
+                      sx={{ alignSelf: "center", pt: 1 }}
+                    />
+                  )}
+                </Stack>
+              )}
             </Paper>
             )}
 

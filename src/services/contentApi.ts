@@ -84,6 +84,22 @@ export type PhotoGalleryItem = {
   createdAt?: string;
 };
 
+export type StoryComment = {
+  _id: string;
+  contentType: "post" | "news" | "event";
+  contentId: string;
+  name: string;
+  message: string;
+  likes: number;
+  createdAt: string;
+};
+
+export type StoryReadersPayload = {
+  contentType: "post" | "news" | "event";
+  contentId: string;
+  readers: number;
+};
+
 const normalizeNewsItem = (item: NewsItem): NewsItem => ({
   ...item,
   description: item.description || item.desc || "",
@@ -209,3 +225,134 @@ export const loadUpcomingEventById = async (id: string) =>
       "Unable to load upcoming event."
     )
   );
+
+const COMMENTS_ENDPOINT = `${API_BASE_URL}/api/comments`;
+const READERS_ENDPOINT = `${API_BASE_URL}/api/readers`;
+const COMMENTS_STORAGE_KEY = "reallife_public_comments";
+const READER_STORAGE_KEY = "reallife_story_readers";
+
+const getLocalComments = (): StoryComment[] => {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(localStorage.getItem(COMMENTS_STORAGE_KEY) || "[]");
+    return Array.isArray(parsed) ? (parsed as StoryComment[]) : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveLocalComments = (comments: StoryComment[]) => {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(COMMENTS_STORAGE_KEY, JSON.stringify(comments));
+};
+
+const getLocalReaderCounts = (): Record<string, number> => {
+  if (typeof window === "undefined") return {};
+  try {
+    const parsed = JSON.parse(localStorage.getItem(READER_STORAGE_KEY) || "{}");
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, number>) : {};
+  } catch {
+    return {};
+  }
+};
+
+const saveLocalReaderCounts = (counts: Record<string, number>) => {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(READER_STORAGE_KEY, JSON.stringify(counts));
+};
+
+const storyKey = (contentType: "post" | "news" | "event", contentId: string) => `${contentType}:${contentId}`;
+
+export const loadStoryComments = async (contentType: "post" | "news" | "event", contentId: string) => {
+  try {
+    return await requestJson<StoryComment[]>(
+      [`${COMMENTS_ENDPOINT}?contentType=${encodeURIComponent(contentType)}&contentId=${encodeURIComponent(contentId)}`],
+      undefined,
+      "Unable to load comments."
+    );
+  } catch {
+    return getLocalComments().filter((item) => item.contentType === contentType && item.contentId === contentId);
+  }
+};
+
+export const addStoryComment = async (
+  contentType: "post" | "news" | "event",
+  contentId: string,
+  name: string,
+  message: string
+) => {
+  try {
+    return await requestJson<StoryComment>(
+      [COMMENTS_ENDPOINT],
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contentType, contentId, name, message }),
+      },
+      "Unable to add comment."
+    );
+  } catch {
+    const nextComment: StoryComment = {
+      _id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      contentType,
+      contentId,
+      name: name.trim(),
+      message: message.trim(),
+      likes: 0,
+      createdAt: new Date().toISOString(),
+    };
+    const comments = [nextComment, ...getLocalComments()];
+    saveLocalComments(comments);
+    return nextComment;
+  }
+};
+
+export const toggleStoryCommentLike = async (commentId: string) => {
+  try {
+    return await requestJson<StoryComment>(
+      [`${COMMENTS_ENDPOINT}/${commentId}/like`],
+      { method: "POST" },
+      "Unable to update like."
+    );
+  } catch {
+    const comments = getLocalComments();
+    const comment = comments.find((item) => item._id === commentId);
+    if (!comment) {
+      throw new Error("Comment not found.");
+    }
+    comment.likes = Math.max(0, (comment.likes || 0) + 1);
+    saveLocalComments(comments);
+    return comment;
+  }
+};
+
+export const loadStoryReaders = async (contentType: "post" | "news" | "event", contentId: string) => {
+  try {
+    return await requestJson<StoryReadersPayload>(
+      [`${READERS_ENDPOINT}/${encodeURIComponent(contentType)}/${encodeURIComponent(contentId)}`],
+      undefined,
+      "Unable to load reader count."
+    );
+  } catch {
+    const key = storyKey(contentType, contentId);
+    const counts = getLocalReaderCounts();
+    return { contentType, contentId, readers: counts[key] || 0 };
+  }
+};
+
+export const incrementStoryReaders = async (contentType: "post" | "news" | "event", contentId: string) => {
+  try {
+    return await requestJson<StoryReadersPayload>(
+      [`${READERS_ENDPOINT}/${encodeURIComponent(contentType)}/${encodeURIComponent(contentId)}/increment`],
+      { method: "POST" },
+      "Unable to update reader count."
+    );
+  } catch {
+    const key = storyKey(contentType, contentId);
+    const counts = getLocalReaderCounts();
+    const readers = (counts[key] || 0) + 1;
+    counts[key] = readers;
+    saveLocalReaderCounts(counts);
+    return { contentType, contentId, readers };
+  }
+};

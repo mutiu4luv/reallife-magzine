@@ -1,7 +1,31 @@
 {
   "posts": [],
-  "news": [],
+  "news": [
+    {
+      "id": "a13a9991-9018-4f5b-bf38-48ad261f66aa",
+      "_id": "a13a9991-9018-4f5b-bf38-48ad261f66aa",
+      "title": "E2E News Story",
+      "description": "E2E body for reader count and comments",
+      "image": "https://picsum.photos/seed/e2e/1200/800",
+      "createdAt": "2026-05-29T11:42:26.662Z"
+    }
+  ],
   "upcomingEvents": [],
   "contactMessages": [],
-  "pastEditions": []
+  "pastEditions": [],
+  "comments": [
+    {
+      "id": "dce5db7a-c179-47d5-a98e-155c7bfb3b0a",
+      "_id": "dce5db7a-c179-47d5-a98e-155c7bfb3b0a",
+      "contentType": "post",
+      "contentId": "e2e-story-1",
+      "name": "E2E Guest",
+      "message": "This is an e2e comment",
+      "likes": 1,
+      "createdAt": "2026-05-29T11:38:23.294Z"
+    }
+  ],
+  "readers": {
+    "post:e2e-story-1": 1
+  }
 }
