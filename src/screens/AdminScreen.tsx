@@ -69,6 +69,7 @@ import {
 import type { AuditLog, AuthUser, Permission } from "../services/authApi";
 
 const POST_ENDPOINT = `${API_BASE_URL}/api/posts`;
+const DELETED_POSTS_ENDPOINT = `${API_BASE_URL}/api/posts/deleted/list`;
 const EVENT_ENDPOINTS = [`${API_BASE_URL}/api/upcoming-events`, `${API_BASE_URL}/api/events`];
 const CONTACT_ENDPOINTS = [
   `${API_BASE_URL}/api/contact`,
@@ -93,6 +94,10 @@ type Post = {
   desc: string;
   image: string;
   images?: string[];
+  isDeleted?: boolean;
+  deletedAt?: string;
+  deletedBy?: { name?: string; email?: string; role?: string };
+  editHistory?: Array<{ editedAt?: string; editedBy?: { name?: string; email?: string; role?: string } }>;
   createdAt?: string;
 };
 
@@ -558,6 +563,7 @@ const AdminScreen: React.FC = () => {
   const interviewFormRef = useRef<HTMLFormElement>(null);
   const photoGalleryFormRef = useRef<HTMLFormElement>(null);
   const [posts, setPosts] = useState<Post[]>([]);
+  const [deletedPosts, setDeletedPosts] = useState<Post[]>([]);
   const [news, setNews] = useState<NewsItem[]>([]);
   const [events, setEvents] = useState<UpcomingEvent[]>([]);
   const [pastEditions, setPastEditions] = useState<PastEdition[]>([]);
@@ -702,6 +708,7 @@ const AdminScreen: React.FC = () => {
       testimonyResult,
       interviewResult,
       photoGalleryResult,
+      deletedPostsResult,
       adminRequestResult,
       permissionRequestResult,
       userResult,
@@ -717,6 +724,9 @@ const AdminScreen: React.FC = () => {
       requestCollection<Testimony>([TESTIMONIES_ENDPOINT], "Unable to load testimonies."),
       requestCollection<Interview>([INTERVIEWS_ENDPOINT], "Unable to load interviews."),
       requestCollection<GalleryPhoto>([PHOTO_GALLERY_ENDPOINT], "Unable to load photo gallery."),
+      isOwnerAdmin
+        ? requestCollection<Post>([DELETED_POSTS_ENDPOINT], "Unable to load deleted blogs.")
+        : Promise.resolve({ items: [] as Post[], error: "" }),
       isOwnerAdmin
         ? loadAdminRequests()
         .then((items) => ({ items, error: "" }))
@@ -759,6 +769,7 @@ const AdminScreen: React.FC = () => {
     setTestimonies(testimonyResult.items);
     setInterviews(interviewResult.items);
     setGalleryPhotos(photoGalleryResult.items);
+    setDeletedPosts(deletedPostsResult.items);
     setAdminRequests(adminRequestResult.items);
     setPermissionRequests(permissionRequestResult.items);
     setUsers(userResult.items);
@@ -773,6 +784,7 @@ const AdminScreen: React.FC = () => {
       testimonyResult.error && "testimonies",
       interviewResult.error && "interviews",
       photoGalleryResult.error && "photo gallery",
+      deletedPostsResult.error && "deleted blogs",
       adminRequestResult.error && "admin requests",
       permissionRequestResult.error && "blogger requests",
       userResult.error && "users",
@@ -1615,11 +1627,97 @@ const AdminScreen: React.FC = () => {
       );
 
       setPosts((currentPosts) => currentPosts.filter((currentPost) => currentPost._id !== post._id));
-      setFeedback({ severity: "success", message: "Blog deleted successfully." });
+      if (isOwnerAdmin) {
+        setDeletedPosts((currentPosts) => currentPosts.filter((currentPost) => currentPost._id !== post._id));
+        setFeedback({ severity: "success", message: "Blog deleted permanently." });
+      } else {
+        setFeedback({ severity: "success", message: "Blog removed from users and sent to admin review." });
+      }
+      if (isOwnerAdmin) {
+        void loadAdminData();
+      }
     } catch (error) {
       setFeedback({
         severity: "error",
         message: error instanceof Error ? error.message : "Unable to delete blog.",
+      });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleRestoreDeletedPost = async (post: Post) => {
+    if (!post._id) {
+      setFeedback({ severity: "error", message: "This blog cannot be restored because it has no database id." });
+      return;
+    }
+
+    setDeletingId(post._id);
+    try {
+      const response = await requestJson<{ message: string; post: Post }>(
+        [`${POST_ENDPOINT}/${post._id}/restore`],
+        { method: "PATCH" },
+        "Unable to restore blog."
+      );
+      setDeletedPosts((currentPosts) => currentPosts.filter((currentPost) => currentPost._id !== post._id));
+      setPosts((currentPosts) => [response.post, ...currentPosts]);
+      setFeedback({ severity: "success", message: "Blog restored for users." });
+    } catch (error) {
+      setFeedback({
+        severity: "error",
+        message: error instanceof Error ? error.message : "Unable to restore blog.",
+      });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handlePermanentDeletePost = async (post: Post) => {
+    if (!post._id) {
+      setFeedback({ severity: "error", message: "This blog cannot be permanently deleted because it has no database id." });
+      return;
+    }
+
+    setDeletingId(post._id);
+    try {
+      await requestJson<{ message: string }>(
+        [`${POST_ENDPOINT}/${post._id}/permanent`],
+        { method: "DELETE" },
+        "Unable to permanently delete blog."
+      );
+      setDeletedPosts((currentPosts) => currentPosts.filter((currentPost) => currentPost._id !== post._id));
+      setFeedback({ severity: "success", message: "Blog permanently deleted." });
+    } catch (error) {
+      setFeedback({
+        severity: "error",
+        message: error instanceof Error ? error.message : "Unable to permanently delete blog.",
+      });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleUndoLastPostEdit = async (post: Post) => {
+    if (!post._id) {
+      setFeedback({ severity: "error", message: "This blog cannot be reverted because it has no database id." });
+      return;
+    }
+
+    setDeletingId(post._id);
+    try {
+      const response = await requestJson<{ message: string; post: Post }>(
+        [`${POST_ENDPOINT}/${post._id}/undo-edit`],
+        { method: "PATCH" },
+        "Unable to undo blog edit."
+      );
+      setPosts((currentPosts) =>
+        currentPosts.map((currentPost) => (currentPost._id === post._id ? response.post : currentPost))
+      );
+      setFeedback({ severity: "success", message: "Latest blog edit was reverted." });
+    } catch (error) {
+      setFeedback({
+        severity: "error",
+        message: error instanceof Error ? error.message : "Unable to undo blog edit.",
       });
     } finally {
       setDeletingId(null);
@@ -3119,6 +3217,25 @@ const AdminScreen: React.FC = () => {
                     >
                       Delete
                     </Button>}
+                    {isOwnerAdmin && (
+                      <Button
+                        onClick={() => void handleUndoLastPostEdit(post)}
+                        disabled={deletingId === post._id}
+                        size="small"
+                        sx={{
+                          gridColumn: { xs: "1 / -1", sm: "auto" },
+                          justifySelf: { xs: "stretch", sm: "end" },
+                          color: "#175cd3",
+                          border: "1px solid #b2ccff",
+                          bgcolor: "#fff",
+                          textTransform: "none",
+                          fontWeight: 900,
+                          "&:hover": { bgcolor: "#eff8ff", borderColor: "#84adff" },
+                        }}
+                      >
+                        Undo last edit
+                      </Button>
+                    )}
                   </Box>
                 ))}
 
@@ -3137,6 +3254,74 @@ const AdminScreen: React.FC = () => {
                   />
                 )}
               </Stack>
+
+              {isOwnerAdmin && (
+                <Box sx={{ mt: 3 }}>
+                  <Divider sx={{ mb: 2 }} />
+                  <Typography variant="h6" sx={{ fontWeight: 900, mb: 1.5 }}>
+                    Deleted blogs by bloggers
+                  </Typography>
+                  <Stack spacing={1.5}>
+                    {deletedPosts.map((post) => (
+                      <Box
+                        key={`deleted-${post._id || post.title}`}
+                        sx={{
+                          display: "grid",
+                          gridTemplateColumns: { xs: "1fr", sm: "minmax(0, 1fr) auto auto" },
+                          gap: 1.25,
+                          alignItems: "center",
+                          border: "1px solid #f4d8d5",
+                          borderRadius: 1.5,
+                          p: 1.25,
+                          bgcolor: "#fff7f6",
+                        }}
+                      >
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography sx={{ fontWeight: 900, color: "#171a20" }} noWrap>
+                            {post.title}
+                          </Typography>
+                          <Typography sx={{ color: "#8a4b44", fontSize: 13 }} noWrap>
+                            Deleted by {post.deletedBy?.name || "blogger"} {post.deletedAt ? `- ${formatDate(post.deletedAt)}` : ""}
+                          </Typography>
+                        </Box>
+                        <Button
+                          onClick={() => void handleRestoreDeletedPost(post)}
+                          disabled={deletingId === post._id}
+                          size="small"
+                          sx={{
+                            color: "#175cd3",
+                            border: "1px solid #b2ccff",
+                            bgcolor: "#fff",
+                            textTransform: "none",
+                            fontWeight: 900,
+                            "&:hover": { bgcolor: "#eff8ff", borderColor: "#84adff" },
+                          }}
+                        >
+                          Restore
+                        </Button>
+                        <Button
+                          onClick={() => void handlePermanentDeletePost(post)}
+                          disabled={deletingId === post._id}
+                          size="small"
+                          sx={{
+                            color: "#b42318",
+                            border: "1px solid #fda29b",
+                            bgcolor: "#fff",
+                            textTransform: "none",
+                            fontWeight: 900,
+                            "&:hover": { bgcolor: "#fff1f3", borderColor: "#f97066" },
+                          }}
+                        >
+                          Delete permanently
+                        </Button>
+                      </Box>
+                    ))}
+                    {!deletedPosts.length && (
+                      <Typography sx={{ color: "#667085" }}>No deleted blogs pending review.</Typography>
+                    )}
+                  </Stack>
+                </Box>
+              )}
             </Paper>
             )}
 
