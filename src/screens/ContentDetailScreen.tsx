@@ -800,7 +800,11 @@ const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
                   value={commentName}
                   onChange={(event) => setCommentName(event.target.value)}
                   fullWidth
-                  sx={{ "& .MuiOutlinedInput-root": { bgcolor: "#151922", color: "#fff" }, "& .MuiInputLabel-root": { color: "#c8cfdb" } }}
+                  sx={{
+                    "& .MuiOutlinedInput-root": { bgcolor: "#151922", color: "#fff" },
+                    "& .MuiInputLabel-root": { color: "#fff" },
+                    "& .MuiInputLabel-root.Mui-focused": { color: "#fff" },
+                  }}
                 />
                 <TextField
                   size="small"
@@ -810,7 +814,11 @@ const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
                   multiline
                   minRows={3}
                   fullWidth
-                  sx={{ "& .MuiOutlinedInput-root": { bgcolor: "#151922", color: "#fff" }, "& .MuiInputLabel-root": { color: "#c8cfdb" } }}
+                  sx={{
+                    "& .MuiOutlinedInput-root": { bgcolor: "#151922", color: "#fff" },
+                    "& .MuiInputLabel-root": { color: "#fff" },
+                    "& .MuiInputLabel-root.Mui-focused": { color: "#fff" },
+                  }}
                 />
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
                   <Typography sx={{ color: commentError ? "#ffb4ab" : "#9da4af", fontSize: 13 }}>
@@ -825,7 +833,7 @@ const ContentDetailScreen: React.FC<ContentDetailScreenProps> = ({ kind }) => {
                 {comments.map((comment) => (
                   <Paper key={comment._id} elevation={0} sx={{ p: 1.75, borderRadius: 1.5, bgcolor: "#151922", border: "1px solid rgba(255,255,255,0.1)" }}>
                     <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1, alignItems: "center" }}>
-                      <Typography sx={{ fontWeight: 900 }}>{comment.name}</Typography>
+                      <Typography sx={{ fontWeight: 900, color: "#fff" }}>{comment.name}</Typography>
                       <Typography sx={{ color: "#9da4af", fontSize: 12 }}>{formatDate(comment.createdAt)}</Typography>
                     </Box>
                     <Typography sx={{ color: "#d8dde5", lineHeight: 1.65, mt: 0.8 }}>{comment.message}</Typography>
