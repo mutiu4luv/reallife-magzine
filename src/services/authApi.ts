@@ -66,6 +66,10 @@ export type AuditLog = {
   path?: string;
   targetId?: string;
   createdAt?: string;
+  metadata?: {
+    title?: string;
+    [key: string]: unknown;
+  };
 };
 
 const AUTH_ENDPOINT = `${API_BASE_URL}/api/auth`;
