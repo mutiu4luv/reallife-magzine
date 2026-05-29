@@ -438,6 +438,19 @@ const formatDateTime = (value?: string) => {
   }).format(new Date(value));
 };
 
+const getLocalDateKey = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+
+const getLocalDateKeyFromValue = (value?: string) => {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return getLocalDateKey(parsed);
+};
+
+const toActivityActionLabel = (log: AuditLog) =>
+  `${String(log.action || "").replaceAll("_", " ")} ${log.resource || ""}`.trim();
+
 const getSearchText = (values: Array<string | undefined>) =>
   values.join(" ").toLowerCase();
 
@@ -644,6 +657,7 @@ const AdminScreen: React.FC = () => {
   const [newsPage, setNewsPage] = useState(1);
   const [eventPage, setEventPage] = useState(1);
   const [activityPage, setActivityPage] = useState(1);
+  const [selectedActivityLog, setSelectedActivityLog] = useState<AuditLog | null>(null);
 
   const activeEvents = useMemo(() => events.filter((event) => event.isActive).length, [events]);
   const magazines = useMemo(() => posts.filter((post) => post.type === "Magazine").length, [posts]);
@@ -682,7 +696,7 @@ const AdminScreen: React.FC = () => {
       items = items.filter((log) => {
         const createdAt = log.createdAt ? new Date(log.createdAt) : null;
         if (!createdAt || Number.isNaN(createdAt.getTime())) return false;
-        return createdAt.toISOString().slice(0, 10) === activityDate;
+        return getLocalDateKey(createdAt) === activityDate;
       });
     }
 
@@ -715,10 +729,8 @@ const AdminScreen: React.FC = () => {
   const activityDays = useMemo(() => {
     const days = new Set<string>();
     auditLogs.forEach((log) => {
-      if (!log.createdAt) return;
-      const parsed = new Date(log.createdAt);
-      if (Number.isNaN(parsed.getTime())) return;
-      days.add(parsed.toISOString().slice(0, 10));
+      const day = getLocalDateKeyFromValue(log.createdAt);
+      if (day) days.add(day);
     });
     return Array.from(days).sort((a, b) => b.localeCompare(a));
   }, [auditLogs]);
@@ -730,10 +742,7 @@ const AdminScreen: React.FC = () => {
   const dashboardDayLogs = useMemo(() => {
     if (!activeDashboardDay) return [];
     return auditLogs.filter((log) => {
-      if (!log.createdAt) return false;
-      const parsed = new Date(log.createdAt);
-      if (Number.isNaN(parsed.getTime())) return false;
-      return parsed.toISOString().slice(0, 10) === activeDashboardDay;
+      return getLocalDateKeyFromValue(log.createdAt) === activeDashboardDay;
     });
   }, [activeDashboardDay, auditLogs]);
   const dashboardActionSummary = useMemo(() => {
@@ -2681,12 +2690,19 @@ const AdminScreen: React.FC = () => {
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: { xs: "flex-start", md: "center" }, gap: 1.5, flexDirection: { xs: "column", md: "row" }, mb: 1.5 }}>
                   <Typography variant="h6" sx={{ fontWeight: 900 }}>Daily activity summary</Typography>
                   <TextField
+                    select
                     size="small"
-                    type="date"
                     value={selectedDashboardDate}
                     onChange={(event) => setDashboardActivityDate(event.target.value)}
+                    label="Activity date"
                     sx={{ width: { xs: "100%", md: 220 } }}
-                  />
+                  >
+                    {activityDays.map((day) => (
+                      <MenuItem key={day} value={day}>
+                        {day}
+                      </MenuItem>
+                    ))}
+                  </TextField>
                 </Box>
                 {!activeDashboardDay ? (
                   <Typography sx={{ color: "#667085" }}>No activity log available yet.</Typography>
@@ -2703,6 +2719,51 @@ const AdminScreen: React.FC = () => {
                     ))}
                     {!dashboardActionSummary.length && (
                       <Typography sx={{ color: "#667085" }}>No actions recorded for this day.</Typography>
+                    )}
+                    {dashboardDayLogs.length > 0 && (
+                      <>
+                        <Typography sx={{ color: "#171a20", fontSize: 14, fontWeight: 900, pt: 0.6 }}>
+                          Detailed events
+                        </Typography>
+                        {dashboardDayLogs.slice(0, 20).map((log, index) => (
+                          <Box
+                            key={log._id || `${log.createdAt || "event"}-${index}`}
+                            component="button"
+                            type="button"
+                            onClick={() => setSelectedActivityLog(log)}
+                            sx={{
+                              width: "100%",
+                              background: "transparent",
+                              textAlign: "left",
+                              cursor: "pointer",
+                              appearance: "none",
+                              border: "1px solid #edf0f2",
+                              borderRadius: 1.25,
+                              p: 1.1,
+                              justifyContent: "space-between",
+                              textTransform: "none",
+                              fontWeight: 700,
+                              color: "#1d2939",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 1,
+                              "&:hover": { bgcolor: "#f9fafb" },
+                            }}
+                          >
+                            <Box sx={{ textAlign: "left", minWidth: 0, pr: 1.25 }}>
+                              <Typography sx={{ fontWeight: 800, fontSize: 13.5, textTransform: "capitalize" }}>
+                                {toActivityActionLabel(log)}
+                              </Typography>
+                              <Typography sx={{ color: "#667085", fontSize: 12 }} noWrap>
+                                {log.metadata?.title || log.targetId || "No title"} • {log.actorName || "System"}
+                              </Typography>
+                            </Box>
+                            <Typography sx={{ color: "#667085", fontSize: 12, flexShrink: 0 }}>
+                              {formatDateTime(log.createdAt)}
+                            </Typography>
+                          </Box>
+                        ))}
+                      </>
                     )}
                   </Stack>
                 )}
@@ -5293,6 +5354,47 @@ const AdminScreen: React.FC = () => {
             }}
           >
             Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
+        open={Boolean(selectedActivityLog)}
+        onClose={() => setSelectedActivityLog(null)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle sx={{ fontWeight: 900 }}>Activity details</DialogTitle>
+        <DialogContent>
+          {selectedActivityLog && (
+            <Stack spacing={1.25} sx={{ pt: 0.4 }}>
+              <Typography sx={{ color: "#101828", fontWeight: 900, textTransform: "capitalize" }}>
+                {toActivityActionLabel(selectedActivityLog)}
+              </Typography>
+              <Typography sx={{ color: "#475467" }}>
+                {selectedActivityLog.actorName || "System"} performed this action on{" "}
+                {formatDateTime(selectedActivityLog.createdAt)}.
+              </Typography>
+              <Typography sx={{ color: "#475467" }}>
+                Title: {selectedActivityLog.metadata?.title || "No title available"}
+              </Typography>
+              <Typography sx={{ color: "#475467" }}>
+                Resource: {selectedActivityLog.resource || "N/A"}
+              </Typography>
+              <Typography sx={{ color: "#475467" }}>
+                Endpoint: {selectedActivityLog.method || "N/A"} {selectedActivityLog.path || "N/A"}
+              </Typography>
+              <Typography sx={{ color: "#475467" }}>
+                Target ID: {selectedActivityLog.targetId || "N/A"}
+              </Typography>
+              <Typography sx={{ color: "#475467" }}>
+                Actor email: {selectedActivityLog.actorEmail || "N/A"}
+              </Typography>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button onClick={() => setSelectedActivityLog(null)} sx={{ color: "#475467", textTransform: "none", fontWeight: 800 }}>
+            Close
           </Button>
         </DialogActions>
       </Dialog>
