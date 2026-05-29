@@ -1,4 +1,4 @@
-import { API_BASE_URL } from "../config/api";
+import { API_BASE_URL, DEPLOYED_API_BASE_URL, LOCAL_API_BASE_URL } from "../config/api";
 
 export const NEWS_ENDPOINT = `${API_BASE_URL}/api/news`;
 export const POSTS_ENDPOINT = `${API_BASE_URL}/api/posts`;
@@ -103,22 +103,38 @@ export type StoryReadersPayload = {
 const normalizeNewsItem = (item: NewsItem): NewsItem => ({
   ...item,
   description: item.description || item.desc || "",
-  image: item.image || item.images?.[0] || "",
-  images: Array.isArray(item.images) ? item.images : item.image ? [item.image] : [],
+  image: sanitizeImageUrl(item.image) || sanitizeImageUrl(item.images?.[0]) || "",
+  images: sanitizeImageList(Array.isArray(item.images) ? item.images : item.image ? [item.image] : []),
 });
 
 const normalizeEventItem = (item: EventItem): EventItem => ({
   ...item,
   description: item.description || item.desc || "",
-  images: Array.isArray(item.images) ? item.images : [],
+  images: sanitizeImageList(Array.isArray(item.images) ? item.images : []),
 });
 
 const normalizePostItem = (item: PostItem): PostItem => ({
   ...item,
   desc: item.desc || item.description || "",
-  image: item.image || item.images?.[0] || "",
-  images: Array.isArray(item.images) ? item.images : item.image ? [item.image] : [],
+  image: sanitizeImageUrl(item.image) || sanitizeImageUrl(item.images?.[0]) || "",
+  images: sanitizeImageList(Array.isArray(item.images) ? item.images : item.image ? [item.image] : []),
 });
+
+const sanitizeImageUrl = (value?: string | null) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (raw.startsWith("/")) return raw;
+  try {
+    const parsed = new URL(raw);
+    if (!["http:", "https:"].includes(parsed.protocol)) return "";
+    if (parsed.hostname === "x") return "";
+    return raw;
+  } catch {
+    return "";
+  }
+};
+
+const sanitizeImageList = (values: string[]) => values.map((item) => sanitizeImageUrl(item)).filter(Boolean);
 
 export const normalizeCollection = <T,>(payload: unknown): T[] => {
   if (Array.isArray(payload)) {
@@ -147,13 +163,21 @@ export const requestJson = async <T,>(
   init?: RequestInit,
   fallback = "Request failed."
 ) => {
+  const expandedEndpoints = endpoints.flatMap((endpoint) => {
+    if (!endpoint.startsWith(LOCAL_API_BASE_URL) || endpoint.startsWith(DEPLOYED_API_BASE_URL)) {
+      return [endpoint];
+    }
+    const deployedEndpoint = endpoint.replace(LOCAL_API_BASE_URL, DEPLOYED_API_BASE_URL);
+    return [endpoint, deployedEndpoint];
+  });
+
   let lastError = fallback;
 
-  for (const endpoint of endpoints) {
+  for (const endpoint of expandedEndpoints) {
     try {
       const response = await fetch(endpoint, init);
 
-      if (response.status === 404 && endpoint !== endpoints[endpoints.length - 1]) {
+      if (response.status === 404 && endpoint !== expandedEndpoints[expandedEndpoints.length - 1]) {
         lastError = await getErrorMessage(response, fallback);
         continue;
       }
@@ -167,7 +191,7 @@ export const requestJson = async <T,>(
     } catch (error) {
       lastError = error instanceof Error ? error.message : fallback;
 
-      if (endpoint === endpoints[endpoints.length - 1]) {
+      if (endpoint === expandedEndpoints[expandedEndpoints.length - 1]) {
         throw new Error(lastError);
       }
     }
@@ -228,51 +252,13 @@ export const loadUpcomingEventById = async (id: string) =>
 
 const COMMENTS_ENDPOINT = `${API_BASE_URL}/api/comments`;
 const READERS_ENDPOINT = `${API_BASE_URL}/api/readers`;
-const COMMENTS_STORAGE_KEY = "reallife_public_comments";
-const READER_STORAGE_KEY = "reallife_story_readers";
-
-const getLocalComments = (): StoryComment[] => {
-  if (typeof window === "undefined") return [];
-  try {
-    const parsed = JSON.parse(localStorage.getItem(COMMENTS_STORAGE_KEY) || "[]");
-    return Array.isArray(parsed) ? (parsed as StoryComment[]) : [];
-  } catch {
-    return [];
-  }
-};
-
-const saveLocalComments = (comments: StoryComment[]) => {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(COMMENTS_STORAGE_KEY, JSON.stringify(comments));
-};
-
-const getLocalReaderCounts = (): Record<string, number> => {
-  if (typeof window === "undefined") return {};
-  try {
-    const parsed = JSON.parse(localStorage.getItem(READER_STORAGE_KEY) || "{}");
-    return parsed && typeof parsed === "object" ? (parsed as Record<string, number>) : {};
-  } catch {
-    return {};
-  }
-};
-
-const saveLocalReaderCounts = (counts: Record<string, number>) => {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(READER_STORAGE_KEY, JSON.stringify(counts));
-};
-
-const storyKey = (contentType: "post" | "news" | "event", contentId: string) => `${contentType}:${contentId}`;
 
 export const loadStoryComments = async (contentType: "post" | "news" | "event", contentId: string) => {
-  try {
-    return await requestJson<StoryComment[]>(
-      [`${COMMENTS_ENDPOINT}?contentType=${encodeURIComponent(contentType)}&contentId=${encodeURIComponent(contentId)}`],
-      undefined,
-      "Unable to load comments."
-    );
-  } catch {
-    return getLocalComments().filter((item) => item.contentType === contentType && item.contentId === contentId);
-  }
+  return requestJson<StoryComment[]>(
+    [`${COMMENTS_ENDPOINT}?contentType=${encodeURIComponent(contentType)}&contentId=${encodeURIComponent(contentId)}`],
+    undefined,
+    "Unable to load comments."
+  );
 };
 
 export const addStoryComment = async (
@@ -281,78 +267,37 @@ export const addStoryComment = async (
   name: string,
   message: string
 ) => {
-  try {
-    return await requestJson<StoryComment>(
-      [COMMENTS_ENDPOINT],
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contentType, contentId, name, message }),
-      },
-      "Unable to add comment."
-    );
-  } catch {
-    const nextComment: StoryComment = {
-      _id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      contentType,
-      contentId,
-      name: name.trim(),
-      message: message.trim(),
-      likes: 0,
-      createdAt: new Date().toISOString(),
-    };
-    const comments = [nextComment, ...getLocalComments()];
-    saveLocalComments(comments);
-    return nextComment;
-  }
+  return requestJson<StoryComment>(
+    [COMMENTS_ENDPOINT],
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contentType, contentId, name, message }),
+    },
+    "Unable to add comment."
+  );
 };
 
 export const toggleStoryCommentLike = async (commentId: string) => {
-  try {
-    return await requestJson<StoryComment>(
-      [`${COMMENTS_ENDPOINT}/${commentId}/like`],
-      { method: "POST" },
-      "Unable to update like."
-    );
-  } catch {
-    const comments = getLocalComments();
-    const comment = comments.find((item) => item._id === commentId);
-    if (!comment) {
-      throw new Error("Comment not found.");
-    }
-    comment.likes = Math.max(0, (comment.likes || 0) + 1);
-    saveLocalComments(comments);
-    return comment;
-  }
+  return requestJson<StoryComment>(
+    [`${COMMENTS_ENDPOINT}/${commentId}/like`],
+    { method: "POST" },
+    "Unable to update like."
+  );
 };
 
 export const loadStoryReaders = async (contentType: "post" | "news" | "event", contentId: string) => {
-  try {
-    return await requestJson<StoryReadersPayload>(
-      [`${READERS_ENDPOINT}/${encodeURIComponent(contentType)}/${encodeURIComponent(contentId)}`],
-      undefined,
-      "Unable to load reader count."
-    );
-  } catch {
-    const key = storyKey(contentType, contentId);
-    const counts = getLocalReaderCounts();
-    return { contentType, contentId, readers: counts[key] || 0 };
-  }
+  return requestJson<StoryReadersPayload>(
+    [`${READERS_ENDPOINT}/${encodeURIComponent(contentType)}/${encodeURIComponent(contentId)}`],
+    undefined,
+    "Unable to load reader count."
+  );
 };
 
 export const incrementStoryReaders = async (contentType: "post" | "news" | "event", contentId: string) => {
-  try {
-    return await requestJson<StoryReadersPayload>(
-      [`${READERS_ENDPOINT}/${encodeURIComponent(contentType)}/${encodeURIComponent(contentId)}/increment`],
-      { method: "POST" },
-      "Unable to update reader count."
-    );
-  } catch {
-    const key = storyKey(contentType, contentId);
-    const counts = getLocalReaderCounts();
-    const readers = (counts[key] || 0) + 1;
-    counts[key] = readers;
-    saveLocalReaderCounts(counts);
-    return { contentType, contentId, readers };
-  }
+  return requestJson<StoryReadersPayload>(
+    [`${READERS_ENDPOINT}/${encodeURIComponent(contentType)}/${encodeURIComponent(contentId)}/increment`],
+    { method: "POST" },
+    "Unable to update reader count."
+  );
 };
