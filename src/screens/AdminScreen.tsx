@@ -424,6 +424,20 @@ const formatDate = (value?: string) => {
   }).format(new Date(value));
 };
 
+const formatDateTime = (value?: string) => {
+  if (!value) {
+    return "Just now";
+  }
+
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+};
+
 const getSearchText = (values: Array<string | undefined>) =>
   values.join(" ").toLowerCase();
 
@@ -587,6 +601,7 @@ const AdminScreen: React.FC = () => {
   const [permissionRequests, setPermissionRequests] = useState<AuthUser[]>([]);
   const [users, setUsers] = useState<AuthUser[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [isActivityLoading, setIsActivityLoading] = useState(false);
   const [resolvingAdminRequestId, setResolvingAdminRequestId] = useState<string | null>(null);
   const [resolvingPermissionRequestId, setResolvingPermissionRequestId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -621,9 +636,13 @@ const AdminScreen: React.FC = () => {
   const [postSearch, setPostSearch] = useState("");
   const [newsSearch, setNewsSearch] = useState("");
   const [eventSearch, setEventSearch] = useState("");
+  const [activitySearch, setActivitySearch] = useState("");
+  const [activityDate, setActivityDate] = useState("");
+  const [activityTime, setActivityTime] = useState("");
   const [postPage, setPostPage] = useState(1);
   const [newsPage, setNewsPage] = useState(1);
   const [eventPage, setEventPage] = useState(1);
+  const [activityPage, setActivityPage] = useState(1);
 
   const activeEvents = useMemo(() => events.filter((event) => event.isActive).length, [events]);
   const magazines = useMemo(() => posts.filter((post) => post.type === "Magazine").length, [posts]);
@@ -640,15 +659,58 @@ const AdminScreen: React.FC = () => {
     () => filterByQuery(events, eventSearch, (event) => [event.title, event.description, event.createdAt]),
     [eventSearch, events]
   );
+  const filteredActivityLogs = useMemo(() => {
+    let items = auditLogs;
+
+    if (activitySearch.trim()) {
+      const query = activitySearch.trim().toLowerCase();
+      items = items.filter((log) =>
+        getSearchText([
+          log.action,
+          log.resource,
+          log.actorName,
+          log.actorEmail,
+          log.metadata?.title as string | undefined,
+          log.method,
+          log.path,
+        ]).includes(query)
+      );
+    }
+
+    if (activityDate) {
+      items = items.filter((log) => {
+        const createdAt = log.createdAt ? new Date(log.createdAt) : null;
+        if (!createdAt || Number.isNaN(createdAt.getTime())) return false;
+        return createdAt.toISOString().slice(0, 10) === activityDate;
+      });
+    }
+
+    if (activityTime) {
+      items = items.filter((log) => {
+        const createdAt = log.createdAt ? new Date(log.createdAt) : null;
+        if (!createdAt || Number.isNaN(createdAt.getTime())) return false;
+        const time = `${String(createdAt.getHours()).padStart(2, "0")}:${String(createdAt.getMinutes()).padStart(2, "0")}`;
+        return time === activityTime;
+      });
+    }
+
+    return items;
+  }, [activityDate, activitySearch, activityTime, auditLogs]);
   const postPageCount = useMemo(() => getPageCount(filteredPosts.length), [filteredPosts.length]);
   const newsPageCount = useMemo(() => getPageCount(filteredNews.length), [filteredNews.length]);
   const eventPageCount = useMemo(() => getPageCount(filteredEvents.length), [filteredEvents.length]);
+  const activityPageCount = useMemo(() => getPageCount(filteredActivityLogs.length), [filteredActivityLogs.length]);
   const safePostPage = Math.min(postPage, postPageCount);
   const safeNewsPage = Math.min(newsPage, newsPageCount);
   const safeEventPage = Math.min(eventPage, eventPageCount);
+  const safeActivityPage = Math.min(activityPage, activityPageCount);
   const visiblePosts = useMemo(() => paginateItems(filteredPosts, safePostPage), [filteredPosts, safePostPage]);
   const visibleNews = useMemo(() => paginateItems(filteredNews, safeNewsPage), [filteredNews, safeNewsPage]);
   const visibleEvents = useMemo(() => paginateItems(filteredEvents, safeEventPage), [safeEventPage, filteredEvents]);
+  const visibleActivityLogs = useMemo(
+    () => paginateItems(filteredActivityLogs, safeActivityPage),
+    [filteredActivityLogs, safeActivityPage]
+  );
   const currentView = viewCopy[activeView];
   const isOwnerAdmin = user?.role === "admin";
   const can = useCallback((permission: Permission) => hasPermission(user, permission), [user]);
@@ -711,6 +773,9 @@ const AdminScreen: React.FC = () => {
 
   const loadAdminData = useCallback(async () => {
     setIsLoading(true);
+    if (isOwnerAdmin) {
+      setIsActivityLoading(true);
+    }
     const [
       postResult,
       eventResult,
@@ -816,6 +881,9 @@ const AdminScreen: React.FC = () => {
     setPermissionRequests(permissionRequestResult.items);
     setUsers(userResult.items);
     setAuditLogs(auditLogResult.items);
+    if (isOwnerAdmin) {
+      setIsActivityLoading(false);
+    }
 
     const failedSections = [
       postResult.error && "blogs",
@@ -2387,6 +2455,7 @@ const AdminScreen: React.FC = () => {
           top: 0,
           zIndex: 10,
           height: { xs: "auto", md: "100vh" },
+          overflowY: { xs: "visible", md: "auto" },
           borderRight: { xs: 0, md: "1px solid rgba(255,255,255,0.08)" },
           borderBottom: { xs: "1px solid rgba(255,255,255,0.08)", md: 0 },
         }}
@@ -2428,9 +2497,10 @@ const AdminScreen: React.FC = () => {
             spacing={{ xs: 0.75, md: 1 }}
             direction={{ xs: "row", md: "column" }}
             sx={{
-              flex: { xs: 1, md: "initial" },
+              flex: { xs: 1, md: 1 },
               minWidth: 0,
               overflowX: { xs: "auto", md: "visible" },
+              overflowY: { xs: "visible", md: "auto" },
               pb: { xs: 0.25, md: 0 },
             }}
           >
