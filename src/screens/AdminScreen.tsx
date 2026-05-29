@@ -70,6 +70,12 @@ import type { AuditLog, AuthUser, Permission } from "../services/authApi";
 
 const POST_ENDPOINT = `${API_BASE_URL}/api/posts`;
 const DELETED_POSTS_ENDPOINT = `${API_BASE_URL}/api/posts/deleted/list`;
+const DELETED_NEWS_ENDPOINT = `${API_BASE_URL}/api/news/deleted/list`;
+const DELETED_EVENTS_ENDPOINT = `${API_BASE_URL}/api/events/deleted/list`;
+const DELETED_PAST_EDITIONS_ENDPOINT = `${API_BASE_URL}/api/past-editions/deleted/list`;
+const DELETED_TESTIMONIES_ENDPOINT = `${API_BASE_URL}/api/testimonies/deleted/list`;
+const DELETED_INTERVIEWS_ENDPOINT = `${API_BASE_URL}/api/interviews/deleted/list`;
+const DELETED_GALLERY_ENDPOINT = `${API_BASE_URL}/api/photo-gallery/deleted/list`;
 const EVENT_ENDPOINTS = [`${API_BASE_URL}/api/upcoming-events`, `${API_BASE_URL}/api/events`];
 const CONTACT_ENDPOINTS = [
   `${API_BASE_URL}/api/contact`,
@@ -565,11 +571,17 @@ const AdminScreen: React.FC = () => {
   const [posts, setPosts] = useState<Post[]>([]);
   const [deletedPosts, setDeletedPosts] = useState<Post[]>([]);
   const [news, setNews] = useState<NewsItem[]>([]);
+  const [deletedNews, setDeletedNews] = useState<NewsItem[]>([]);
   const [events, setEvents] = useState<UpcomingEvent[]>([]);
+  const [deletedEvents, setDeletedEvents] = useState<UpcomingEvent[]>([]);
   const [pastEditions, setPastEditions] = useState<PastEdition[]>([]);
+  const [deletedPastEditions, setDeletedPastEditions] = useState<PastEdition[]>([]);
   const [testimonies, setTestimonies] = useState<Testimony[]>([]);
+  const [deletedTestimonies, setDeletedTestimonies] = useState<Testimony[]>([]);
   const [interviews, setInterviews] = useState<Interview[]>([]);
+  const [deletedInterviews, setDeletedInterviews] = useState<Interview[]>([]);
   const [galleryPhotos, setGalleryPhotos] = useState<GalleryPhoto[]>([]);
+  const [deletedGalleryPhotos, setDeletedGalleryPhotos] = useState<GalleryPhoto[]>([]);
   const [messages, setMessages] = useState<ContactMessage[]>([]);
   const [adminRequests, setAdminRequests] = useState<AuthUser[]>([]);
   const [permissionRequests, setPermissionRequests] = useState<AuthUser[]>([]);
@@ -704,10 +716,16 @@ const AdminScreen: React.FC = () => {
       eventResult,
       messageResult,
       newsResult,
+      deletedNewsResult,
       pastEditionResult,
+      deletedPastEditionsResult,
       testimonyResult,
+      deletedTestimoniesResult,
       interviewResult,
+      deletedInterviewsResult,
       photoGalleryResult,
+      deletedGalleryResult,
+      deletedEventsResult,
       deletedPostsResult,
       adminRequestResult,
       permissionRequestResult,
@@ -720,10 +738,28 @@ const AdminScreen: React.FC = () => {
         ? requestCollection<ContactMessage>(CONTACT_ENDPOINTS, "Unable to load contact messages.")
         : Promise.resolve({ items: [] as ContactMessage[], error: "" }),
       requestCollection<NewsItem>([NEWS_ENDPOINT], "Unable to load news."),
+      isOwnerAdmin
+        ? requestCollection<NewsItem>([DELETED_NEWS_ENDPOINT], "Unable to load deleted news.")
+        : Promise.resolve({ items: [] as NewsItem[], error: "" }),
       requestCollection<PastEdition>([PAST_EDITIONS_ENDPOINT], "Unable to load past editions."),
+      isOwnerAdmin
+        ? requestCollection<PastEdition>([DELETED_PAST_EDITIONS_ENDPOINT], "Unable to load deleted past editions.")
+        : Promise.resolve({ items: [] as PastEdition[], error: "" }),
       requestCollection<Testimony>([TESTIMONIES_ENDPOINT], "Unable to load testimonies."),
+      isOwnerAdmin
+        ? requestCollection<Testimony>([DELETED_TESTIMONIES_ENDPOINT], "Unable to load deleted testimonies.")
+        : Promise.resolve({ items: [] as Testimony[], error: "" }),
       requestCollection<Interview>([INTERVIEWS_ENDPOINT], "Unable to load interviews."),
+      isOwnerAdmin
+        ? requestCollection<Interview>([DELETED_INTERVIEWS_ENDPOINT], "Unable to load deleted interviews.")
+        : Promise.resolve({ items: [] as Interview[], error: "" }),
       requestCollection<GalleryPhoto>([PHOTO_GALLERY_ENDPOINT], "Unable to load photo gallery."),
+      isOwnerAdmin
+        ? requestCollection<GalleryPhoto>([DELETED_GALLERY_ENDPOINT], "Unable to load deleted gallery photos.")
+        : Promise.resolve({ items: [] as GalleryPhoto[], error: "" }),
+      isOwnerAdmin
+        ? requestCollection<UpcomingEvent>([DELETED_EVENTS_ENDPOINT], "Unable to load deleted events.")
+        : Promise.resolve({ items: [] as UpcomingEvent[], error: "" }),
       isOwnerAdmin
         ? requestCollection<Post>([DELETED_POSTS_ENDPOINT], "Unable to load deleted blogs.")
         : Promise.resolve({ items: [] as Post[], error: "" }),
@@ -763,12 +799,18 @@ const AdminScreen: React.FC = () => {
 
     setPosts(postResult.items);
     setNews(newsResult.items);
+    setDeletedNews(deletedNewsResult.items);
     setEvents(eventResult.items);
+    setDeletedEvents(deletedEventsResult.items);
     setMessages(messageResult.items);
     setPastEditions(pastEditionResult.items);
+    setDeletedPastEditions(deletedPastEditionsResult.items);
     setTestimonies(testimonyResult.items);
+    setDeletedTestimonies(deletedTestimoniesResult.items);
     setInterviews(interviewResult.items);
+    setDeletedInterviews(deletedInterviewsResult.items);
     setGalleryPhotos(photoGalleryResult.items);
+    setDeletedGalleryPhotos(deletedGalleryResult.items);
     setDeletedPosts(deletedPostsResult.items);
     setAdminRequests(adminRequestResult.items);
     setPermissionRequests(permissionRequestResult.items);
@@ -780,10 +822,16 @@ const AdminScreen: React.FC = () => {
       eventResult.error && "events",
       messageResult.error && "messages",
       newsResult.error && "news",
+      deletedNewsResult.error && "deleted news",
       pastEditionResult.error && "past editions",
+      deletedPastEditionsResult.error && "deleted past editions",
       testimonyResult.error && "testimonies",
+      deletedTestimoniesResult.error && "deleted testimonies",
       interviewResult.error && "interviews",
+      deletedInterviewsResult.error && "deleted interviews",
       photoGalleryResult.error && "photo gallery",
+      deletedGalleryResult.error && "deleted gallery photos",
+      deletedEventsResult.error && "deleted events",
       deletedPostsResult.error && "deleted blogs",
       adminRequestResult.error && "admin requests",
       permissionRequestResult.error && "blogger requests",
@@ -1719,6 +1767,303 @@ const AdminScreen: React.FC = () => {
         severity: "error",
         message: error instanceof Error ? error.message : "Unable to undo blog edit.",
       });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleRestoreDeletedNews = async (newsItem: NewsItem) => {
+    if (!newsItem._id) return;
+    setDeletingId(newsItem._id);
+    try {
+      const response = await requestJson<{ news: NewsItem }>(
+        [`${NEWS_ENDPOINT}/${newsItem._id}/restore`],
+        { method: "PATCH" },
+        "Unable to restore news."
+      );
+      setDeletedNews((current) => current.filter((item) => item._id !== newsItem._id));
+      setNews((current) => [response.news, ...current]);
+      setFeedback({ severity: "success", message: "News restored for users." });
+    } catch (error) {
+      setFeedback({ severity: "error", message: error instanceof Error ? error.message : "Unable to restore news." });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handlePermanentDeleteNews = async (newsItem: NewsItem) => {
+    if (!newsItem._id) return;
+    setDeletingId(newsItem._id);
+    try {
+      await requestJson<{ message: string }>(
+        [`${NEWS_ENDPOINT}/${newsItem._id}/permanent`],
+        { method: "DELETE" },
+        "Unable to permanently delete news."
+      );
+      setDeletedNews((current) => current.filter((item) => item._id !== newsItem._id));
+      setFeedback({ severity: "success", message: "News permanently deleted." });
+    } catch (error) {
+      setFeedback({ severity: "error", message: error instanceof Error ? error.message : "Unable to permanently delete news." });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleUndoLastNewsEdit = async (newsItem: NewsItem) => {
+    if (!newsItem._id) return;
+    setDeletingId(newsItem._id);
+    try {
+      const response = await requestJson<{ news: NewsItem }>(
+        [`${NEWS_ENDPOINT}/${newsItem._id}/undo-edit`],
+        { method: "PATCH" },
+        "Unable to undo news edit."
+      );
+      setNews((current) => current.map((item) => (item._id === newsItem._id ? response.news : item)));
+      setFeedback({ severity: "success", message: "Latest news edit was reverted." });
+    } catch (error) {
+      setFeedback({ severity: "error", message: error instanceof Error ? error.message : "Unable to undo news edit." });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleRestoreDeletedEvent = async (eventItem: UpcomingEvent) => {
+    const eventId = eventItem._id || eventItem.id;
+    if (!eventId) return;
+    setDeletingId(eventId);
+    try {
+      const response = await requestJson<{ event: UpcomingEvent }>(
+        [`${API_BASE_URL}/api/events/${eventId}/restore`],
+        { method: "PATCH" },
+        "Unable to restore event."
+      );
+      setDeletedEvents((current) => current.filter((item) => (item._id || item.id) !== eventId));
+      setEvents((current) => [response.event, ...current]);
+      setFeedback({ severity: "success", message: "Event restored for users." });
+    } catch (error) {
+      setFeedback({ severity: "error", message: error instanceof Error ? error.message : "Unable to restore event." });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handlePermanentDeleteEvent = async (eventItem: UpcomingEvent) => {
+    const eventId = eventItem._id || eventItem.id;
+    if (!eventId) return;
+    setDeletingId(eventId);
+    try {
+      await requestJson<{ message: string }>(
+        [`${API_BASE_URL}/api/events/${eventId}/permanent`],
+        { method: "DELETE" },
+        "Unable to permanently delete event."
+      );
+      setDeletedEvents((current) => current.filter((item) => (item._id || item.id) !== eventId));
+      setFeedback({ severity: "success", message: "Event permanently deleted." });
+    } catch (error) {
+      setFeedback({ severity: "error", message: error instanceof Error ? error.message : "Unable to permanently delete event." });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleUndoLastEventEdit = async (eventItem: UpcomingEvent) => {
+    const eventId = eventItem._id || eventItem.id;
+    if (!eventId) return;
+    setDeletingId(eventId);
+    try {
+      const response = await requestJson<{ event: UpcomingEvent }>(
+        [`${API_BASE_URL}/api/events/${eventId}/undo-edit`],
+        { method: "PATCH" },
+        "Unable to undo event edit."
+      );
+      setEvents((current) => current.map((item) => ((item._id || item.id) === eventId ? response.event : item)));
+      setFeedback({ severity: "success", message: "Latest event edit was reverted." });
+    } catch (error) {
+      setFeedback({ severity: "error", message: error instanceof Error ? error.message : "Unable to undo event edit." });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleRestoreDeletedPastEdition = async (edition: PastEdition) => {
+    if (!edition._id) return;
+    setDeletingId(edition._id);
+    try {
+      const response = await requestJson<{ pastEdition: PastEdition }>(
+        [`${PAST_EDITIONS_ENDPOINT}/${edition._id}/restore`],
+        { method: "PATCH" },
+        "Unable to restore past edition."
+      );
+      setDeletedPastEditions((current) => current.filter((item) => item._id !== edition._id));
+      setPastEditions((current) => [response.pastEdition, ...current]);
+      setFeedback({ severity: "success", message: "Past edition restored." });
+    } catch (error) {
+      setFeedback({ severity: "error", message: error instanceof Error ? error.message : "Unable to restore past edition." });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handlePermanentDeletePastEdition = async (edition: PastEdition) => {
+    if (!edition._id) return;
+    setDeletingId(edition._id);
+    try {
+      await requestJson<{ message: string }>(
+        [`${PAST_EDITIONS_ENDPOINT}/${edition._id}/permanent`],
+        { method: "DELETE" },
+        "Unable to permanently delete past edition."
+      );
+      setDeletedPastEditions((current) => current.filter((item) => item._id !== edition._id));
+      setFeedback({ severity: "success", message: "Past edition permanently deleted." });
+    } catch (error) {
+      setFeedback({ severity: "error", message: error instanceof Error ? error.message : "Unable to permanently delete past edition." });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleRestoreDeletedTestimony = async (testimony: Testimony) => {
+    if (!testimony._id) return;
+    setDeletingId(testimony._id);
+    try {
+      const response = await requestJson<{ testimony: Testimony }>(
+        [`${TESTIMONIES_ENDPOINT}/${testimony._id}/restore`],
+        { method: "PATCH" },
+        "Unable to restore testimony."
+      );
+      setDeletedTestimonies((current) => current.filter((item) => item._id !== testimony._id));
+      setTestimonies((current) => [response.testimony, ...current]);
+      setFeedback({ severity: "success", message: "Testimony restored." });
+    } catch (error) {
+      setFeedback({ severity: "error", message: error instanceof Error ? error.message : "Unable to restore testimony." });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handlePermanentDeleteTestimony = async (testimony: Testimony) => {
+    if (!testimony._id) return;
+    setDeletingId(testimony._id);
+    try {
+      await requestJson<{ message: string }>(
+        [`${TESTIMONIES_ENDPOINT}/${testimony._id}/permanent`],
+        { method: "DELETE" },
+        "Unable to permanently delete testimony."
+      );
+      setDeletedTestimonies((current) => current.filter((item) => item._id !== testimony._id));
+      setFeedback({ severity: "success", message: "Testimony permanently deleted." });
+    } catch (error) {
+      setFeedback({ severity: "error", message: error instanceof Error ? error.message : "Unable to permanently delete testimony." });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleUndoLastTestimonyEdit = async (testimony: Testimony) => {
+    if (!testimony._id) return;
+    setDeletingId(testimony._id);
+    try {
+      const response = await requestJson<{ testimony: Testimony }>(
+        [`${TESTIMONIES_ENDPOINT}/${testimony._id}/undo-edit`],
+        { method: "PATCH" },
+        "Unable to undo testimony edit."
+      );
+      setTestimonies((current) => current.map((item) => (item._id === testimony._id ? response.testimony : item)));
+      setFeedback({ severity: "success", message: "Latest testimony edit was reverted." });
+    } catch (error) {
+      setFeedback({ severity: "error", message: error instanceof Error ? error.message : "Unable to undo testimony edit." });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleRestoreDeletedInterview = async (interview: Interview) => {
+    if (!interview._id) return;
+    setDeletingId(interview._id);
+    try {
+      const response = await requestJson<{ interview: Interview }>(
+        [`${INTERVIEWS_ENDPOINT}/${interview._id}/restore`],
+        { method: "PATCH" },
+        "Unable to restore interview."
+      );
+      setDeletedInterviews((current) => current.filter((item) => item._id !== interview._id));
+      setInterviews((current) => [response.interview, ...current]);
+      setFeedback({ severity: "success", message: "Interview restored." });
+    } catch (error) {
+      setFeedback({ severity: "error", message: error instanceof Error ? error.message : "Unable to restore interview." });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handlePermanentDeleteInterview = async (interview: Interview) => {
+    if (!interview._id) return;
+    setDeletingId(interview._id);
+    try {
+      await requestJson<{ message: string }>(
+        [`${INTERVIEWS_ENDPOINT}/${interview._id}/permanent`],
+        { method: "DELETE" },
+        "Unable to permanently delete interview."
+      );
+      setDeletedInterviews((current) => current.filter((item) => item._id !== interview._id));
+      setFeedback({ severity: "success", message: "Interview permanently deleted." });
+    } catch (error) {
+      setFeedback({ severity: "error", message: error instanceof Error ? error.message : "Unable to permanently delete interview." });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleUndoLastInterviewEdit = async (interview: Interview) => {
+    if (!interview._id) return;
+    setDeletingId(interview._id);
+    try {
+      const response = await requestJson<{ interview: Interview }>(
+        [`${INTERVIEWS_ENDPOINT}/${interview._id}/undo-edit`],
+        { method: "PATCH" },
+        "Unable to undo interview edit."
+      );
+      setInterviews((current) => current.map((item) => (item._id === interview._id ? response.interview : item)));
+      setFeedback({ severity: "success", message: "Latest interview edit was reverted." });
+    } catch (error) {
+      setFeedback({ severity: "error", message: error instanceof Error ? error.message : "Unable to undo interview edit." });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleRestoreDeletedGalleryPhoto = async (photo: GalleryPhoto) => {
+    if (!photo._id) return;
+    setDeletingId(photo._id);
+    try {
+      const response = await requestJson<{ photo: GalleryPhoto }>(
+        [`${PHOTO_GALLERY_ENDPOINT}/${photo._id}/restore`],
+        { method: "PATCH" },
+        "Unable to restore gallery image."
+      );
+      setDeletedGalleryPhotos((current) => current.filter((item) => item._id !== photo._id));
+      setGalleryPhotos((current) => [response.photo, ...current]);
+      setFeedback({ severity: "success", message: "Gallery image restored." });
+    } catch (error) {
+      setFeedback({ severity: "error", message: error instanceof Error ? error.message : "Unable to restore gallery image." });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handlePermanentDeleteGalleryPhoto = async (photo: GalleryPhoto) => {
+    if (!photo._id) return;
+    setDeletingId(photo._id);
+    try {
+      await requestJson<{ message: string }>(
+        [`${PHOTO_GALLERY_ENDPOINT}/${photo._id}/permanent`],
+        { method: "DELETE" },
+        "Unable to permanently delete gallery image."
+      );
+      setDeletedGalleryPhotos((current) => current.filter((item) => item._id !== photo._id));
+      setFeedback({ severity: "success", message: "Gallery image permanently deleted." });
+    } catch (error) {
+      setFeedback({ severity: "error", message: error instanceof Error ? error.message : "Unable to permanently delete gallery image." });
     } finally {
       setDeletingId(null);
     }
@@ -3452,6 +3797,26 @@ const AdminScreen: React.FC = () => {
                     >
                       Delete
                     </Button>}
+                    {isOwnerAdmin && (
+                      <Button
+                        onClick={() => void handleUndoLastNewsEdit(newsItem)}
+                        disabled={deletingId === newsItem._id}
+                        startIcon={<Edit />}
+                        size="small"
+                        sx={{
+                          gridColumn: { xs: "1 / -1", sm: "auto" },
+                          justifySelf: { xs: "stretch", sm: "end" },
+                          color: "#175cd3",
+                          border: "1px solid #b2ccff",
+                          bgcolor: "#fff",
+                          textTransform: "none",
+                          fontWeight: 900,
+                          "&:hover": { bgcolor: "#eff8ff", borderColor: "#84adff" },
+                        }}
+                      >
+                        Undo last edit
+                      </Button>
+                    )}
                   </Box>
                 ))}
 
@@ -3470,6 +3835,27 @@ const AdminScreen: React.FC = () => {
                   />
                 )}
               </Stack>
+              {isOwnerAdmin && (
+                <Box sx={{ mt: 3 }}>
+                  <Divider sx={{ mb: 2 }} />
+                  <Typography variant="h6" sx={{ fontWeight: 900, mb: 1.5 }}>
+                    Deleted news by bloggers
+                  </Typography>
+                  <Stack spacing={1.5}>
+                    {deletedNews.map((newsItem) => (
+                      <Box key={`deleted-news-${newsItem._id || newsItem.title}`} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "minmax(0, 1fr) auto auto" }, gap: 1.25, alignItems: "center", border: "1px solid #f4d8d5", borderRadius: 1.5, p: 1.25, bgcolor: "#fff7f6" }}>
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography sx={{ fontWeight: 900, color: "#171a20" }} noWrap>{newsItem.title}</Typography>
+                          <Typography sx={{ color: "#8a4b44", fontSize: 13 }} noWrap>{newsItem.description}</Typography>
+                        </Box>
+                        <Button onClick={() => void handleRestoreDeletedNews(newsItem)} disabled={deletingId === newsItem._id} size="small" sx={{ color: "#175cd3", border: "1px solid #b2ccff", bgcolor: "#fff", textTransform: "none", fontWeight: 900 }}>Restore</Button>
+                        <Button onClick={() => void handlePermanentDeleteNews(newsItem)} disabled={deletingId === newsItem._id} size="small" sx={{ color: "#b42318", border: "1px solid #fda29b", bgcolor: "#fff", textTransform: "none", fontWeight: 900 }}>Delete permanently</Button>
+                      </Box>
+                    ))}
+                    {!deletedNews.length && <Typography sx={{ color: "#667085" }}>No deleted news pending review.</Typography>}
+                  </Stack>
+                </Box>
+              )}
             </Paper>
             )}
 
@@ -3518,7 +3904,7 @@ const AdminScreen: React.FC = () => {
                       key={eventId || `${event.title}-${event.createdAt}`}
                       sx={{
                         display: "grid",
-                        gridTemplateColumns: { xs: "88px minmax(0, 1fr) 44px 44px 44px", md: "112px minmax(0, 1fr) auto auto 44px 44px 44px" },
+                        gridTemplateColumns: { xs: "88px minmax(0, 1fr) 44px 44px 44px 44px", md: "112px minmax(0, 1fr) auto auto 44px 44px 44px 44px" },
                         alignItems: "center",
                         gap: { xs: 1.25, md: 2 },
                         border: "1px solid #edf0f2",
@@ -3638,6 +4024,22 @@ const AdminScreen: React.FC = () => {
                       >
                         <Delete fontSize="small" />
                       </IconButton>}
+                      {isOwnerAdmin && (
+                        <IconButton
+                          aria-label={`Undo edit ${event.title}`}
+                          onClick={() => void handleUndoLastEventEdit(event)}
+                          disabled={deletingId === eventId}
+                          sx={{
+                            color: "#175cd3",
+                            border: "1px solid #b2ccff",
+                            borderRadius: 1.25,
+                            bgcolor: "#fff",
+                            "&:hover": { bgcolor: "#eff8ff", borderColor: "#84adff" },
+                          }}
+                        >
+                          <Edit fontSize="small" />
+                        </IconButton>
+                      )}
                     </Box>
                   );
                 })}
@@ -3657,6 +4059,30 @@ const AdminScreen: React.FC = () => {
                   />
                 )}
               </Stack>
+              {isOwnerAdmin && (
+                <Box sx={{ mt: 3 }}>
+                  <Divider sx={{ mb: 2 }} />
+                  <Typography variant="h6" sx={{ fontWeight: 900, mb: 1.5 }}>
+                    Deleted events by bloggers
+                  </Typography>
+                  <Stack spacing={1.5}>
+                    {deletedEvents.map((event) => {
+                      const eventId = event._id || event.id;
+                      return (
+                        <Box key={`deleted-event-${eventId || event.title}`} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "minmax(0, 1fr) auto auto" }, gap: 1.25, alignItems: "center", border: "1px solid #f4d8d5", borderRadius: 1.5, p: 1.25, bgcolor: "#fff7f6" }}>
+                          <Box sx={{ minWidth: 0 }}>
+                            <Typography sx={{ fontWeight: 900, color: "#171a20" }} noWrap>{event.title}</Typography>
+                            <Typography sx={{ color: "#8a4b44", fontSize: 13 }} noWrap>{event.description || "No description"}</Typography>
+                          </Box>
+                          <Button onClick={() => void handleRestoreDeletedEvent(event)} disabled={deletingId === eventId} size="small" sx={{ color: "#175cd3", border: "1px solid #b2ccff", bgcolor: "#fff", textTransform: "none", fontWeight: 900 }}>Restore</Button>
+                          <Button onClick={() => void handlePermanentDeleteEvent(event)} disabled={deletingId === eventId} size="small" sx={{ color: "#b42318", border: "1px solid #fda29b", bgcolor: "#fff", textTransform: "none", fontWeight: 900 }}>Delete permanently</Button>
+                        </Box>
+                      );
+                    })}
+                    {!deletedEvents.length && <Typography sx={{ color: "#667085" }}>No deleted events pending review.</Typography>}
+                  </Stack>
+                </Box>
+              )}
             </Paper>
             )}
 
@@ -3730,6 +4156,27 @@ const AdminScreen: React.FC = () => {
 
               {!pastEditions.length && !isLoading && (
                 <Typography sx={{ color: "#667085" }}>No past edition images returned from the API yet.</Typography>
+              )}
+              {isOwnerAdmin && (
+                <Box sx={{ mt: 3 }}>
+                  <Divider sx={{ mb: 2 }} />
+                  <Typography variant="h6" sx={{ fontWeight: 900, mb: 1.5 }}>
+                    Deleted past editions by bloggers
+                  </Typography>
+                  <Stack spacing={1.5}>
+                    {deletedPastEditions.map((edition, index) => (
+                      <Box key={`deleted-past-${edition._id || index}`} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "88px minmax(0, 1fr) auto auto" }, gap: 1.25, alignItems: "center", border: "1px solid #f4d8d5", borderRadius: 1.5, p: 1.25, bgcolor: "#fff7f6" }}>
+                        <Box sx={{ width: 88, height: 56, borderRadius: 1, overflow: "hidden", bgcolor: "#111318" }}>
+                          <Box component="img" src={edition.image} alt="" sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        </Box>
+                        <Typography sx={{ fontWeight: 800, color: "#171a20" }} noWrap>{edition.title || "Past edition image"}</Typography>
+                        <Button onClick={() => void handleRestoreDeletedPastEdition(edition)} disabled={deletingId === edition._id} size="small" sx={{ color: "#175cd3", border: "1px solid #b2ccff", bgcolor: "#fff", textTransform: "none", fontWeight: 900 }}>Restore</Button>
+                        <Button onClick={() => void handlePermanentDeletePastEdition(edition)} disabled={deletingId === edition._id} size="small" sx={{ color: "#b42318", border: "1px solid #fda29b", bgcolor: "#fff", textTransform: "none", fontWeight: 900 }}>Delete permanently</Button>
+                      </Box>
+                    ))}
+                    {!deletedPastEditions.length && <Typography sx={{ color: "#667085" }}>No deleted past editions pending review.</Typography>}
+                  </Stack>
+                </Box>
               )}
             </Paper>
             )}
@@ -3813,6 +4260,24 @@ const AdminScreen: React.FC = () => {
                       >
                         Delete
                       </Button>}
+                      {isOwnerAdmin && (
+                        <Button
+                          onClick={() => void handleUndoLastTestimonyEdit(testimony)}
+                          disabled={deletingId === testimony._id}
+                          startIcon={<Edit />}
+                          size="small"
+                          sx={{
+                            color: "#175cd3",
+                            border: "1px solid #b2ccff",
+                            bgcolor: "#fff",
+                            textTransform: "none",
+                            fontWeight: 900,
+                            "&:hover": { bgcolor: "#eff8ff", borderColor: "#84adff" },
+                          }}
+                        >
+                          Undo last edit
+                        </Button>
+                      )}
                     </Stack>
                   </Box>
                 ))}
@@ -3821,6 +4286,27 @@ const AdminScreen: React.FC = () => {
                   <Typography sx={{ color: "#667085" }}>No testimonies returned from the API yet.</Typography>
                 )}
               </Stack>
+              {isOwnerAdmin && (
+                <Box sx={{ mt: 3 }}>
+                  <Divider sx={{ mb: 2 }} />
+                  <Typography variant="h6" sx={{ fontWeight: 900, mb: 1.5 }}>
+                    Deleted testimonies by bloggers
+                  </Typography>
+                  <Stack spacing={1.5}>
+                    {deletedTestimonies.map((testimony) => (
+                      <Box key={`deleted-testimony-${testimony._id || testimony.name}`} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "minmax(0, 1fr) auto auto" }, gap: 1.25, alignItems: "center", border: "1px solid #f4d8d5", borderRadius: 1.5, p: 1.25, bgcolor: "#fff7f6" }}>
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography sx={{ fontWeight: 900, color: "#171a20" }} noWrap>{testimony.name}</Typography>
+                          <Typography sx={{ color: "#8a4b44", fontSize: 13 }} noWrap>{testimony.message}</Typography>
+                        </Box>
+                        <Button onClick={() => void handleRestoreDeletedTestimony(testimony)} disabled={deletingId === testimony._id} size="small" sx={{ color: "#175cd3", border: "1px solid #b2ccff", bgcolor: "#fff", textTransform: "none", fontWeight: 900 }}>Restore</Button>
+                        <Button onClick={() => void handlePermanentDeleteTestimony(testimony)} disabled={deletingId === testimony._id} size="small" sx={{ color: "#b42318", border: "1px solid #fda29b", bgcolor: "#fff", textTransform: "none", fontWeight: 900 }}>Delete permanently</Button>
+                      </Box>
+                    ))}
+                    {!deletedTestimonies.length && <Typography sx={{ color: "#667085" }}>No deleted testimonies pending review.</Typography>}
+                  </Stack>
+                </Box>
+              )}
             </Paper>
             )}
 
@@ -3903,6 +4389,24 @@ const AdminScreen: React.FC = () => {
                       >
                         Delete
                       </Button>}
+                      {isOwnerAdmin && (
+                        <Button
+                          onClick={() => void handleUndoLastInterviewEdit(interview)}
+                          disabled={deletingId === interview._id}
+                          startIcon={<Edit />}
+                          size="small"
+                          sx={{
+                            color: "#175cd3",
+                            border: "1px solid #b2ccff",
+                            bgcolor: "#fff",
+                            textTransform: "none",
+                            fontWeight: 900,
+                            "&:hover": { bgcolor: "#eff8ff", borderColor: "#84adff" },
+                          }}
+                        >
+                          Undo last edit
+                        </Button>
+                      )}
                     </Stack>
                   </Box>
                 ))}
@@ -3911,6 +4415,27 @@ const AdminScreen: React.FC = () => {
                   <Typography sx={{ color: "#667085" }}>No interviews returned from the API yet.</Typography>
                 )}
               </Stack>
+              {isOwnerAdmin && (
+                <Box sx={{ mt: 3 }}>
+                  <Divider sx={{ mb: 2 }} />
+                  <Typography variant="h6" sx={{ fontWeight: 900, mb: 1.5 }}>
+                    Deleted interviews by bloggers
+                  </Typography>
+                  <Stack spacing={1.5}>
+                    {deletedInterviews.map((interview) => (
+                      <Box key={`deleted-interview-${interview._id || interview.name}`} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "minmax(0, 1fr) auto auto" }, gap: 1.25, alignItems: "center", border: "1px solid #f4d8d5", borderRadius: 1.5, p: 1.25, bgcolor: "#fff7f6" }}>
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography sx={{ fontWeight: 900, color: "#171a20" }} noWrap>{interview.name}</Typography>
+                          <Typography sx={{ color: "#8a4b44", fontSize: 13 }} noWrap>{interview.role}</Typography>
+                        </Box>
+                        <Button onClick={() => void handleRestoreDeletedInterview(interview)} disabled={deletingId === interview._id} size="small" sx={{ color: "#175cd3", border: "1px solid #b2ccff", bgcolor: "#fff", textTransform: "none", fontWeight: 900 }}>Restore</Button>
+                        <Button onClick={() => void handlePermanentDeleteInterview(interview)} disabled={deletingId === interview._id} size="small" sx={{ color: "#b42318", border: "1px solid #fda29b", bgcolor: "#fff", textTransform: "none", fontWeight: 900 }}>Delete permanently</Button>
+                      </Box>
+                    ))}
+                    {!deletedInterviews.length && <Typography sx={{ color: "#667085" }}>No deleted interviews pending review.</Typography>}
+                  </Stack>
+                </Box>
+              )}
             </Paper>
             )}
 
@@ -3980,6 +4505,27 @@ const AdminScreen: React.FC = () => {
 
               {!galleryPhotos.length && !isLoading && (
                 <Typography sx={{ color: "#667085" }}>No gallery images returned from the API yet.</Typography>
+              )}
+              {isOwnerAdmin && (
+                <Box sx={{ mt: 3 }}>
+                  <Divider sx={{ mb: 2 }} />
+                  <Typography variant="h6" sx={{ fontWeight: 900, mb: 1.5 }}>
+                    Deleted gallery photos by bloggers
+                  </Typography>
+                  <Stack spacing={1.5}>
+                    {deletedGalleryPhotos.map((photo, index) => (
+                      <Box key={`deleted-gallery-${photo._id || index}`} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "88px minmax(0, 1fr) auto auto" }, gap: 1.25, alignItems: "center", border: "1px solid #f4d8d5", borderRadius: 1.5, p: 1.25, bgcolor: "#fff7f6" }}>
+                        <Box sx={{ width: 88, height: 56, borderRadius: 1, overflow: "hidden", bgcolor: "#111318" }}>
+                          <Box component="img" src={photo.image} alt="" sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        </Box>
+                        <Typography sx={{ fontWeight: 800, color: "#171a20" }} noWrap>{photo.title || `Gallery image ${index + 1}`}</Typography>
+                        <Button onClick={() => void handleRestoreDeletedGalleryPhoto(photo)} disabled={deletingId === photo._id} size="small" sx={{ color: "#175cd3", border: "1px solid #b2ccff", bgcolor: "#fff", textTransform: "none", fontWeight: 900 }}>Restore</Button>
+                        <Button onClick={() => void handlePermanentDeleteGalleryPhoto(photo)} disabled={deletingId === photo._id} size="small" sx={{ color: "#b42318", border: "1px solid #fda29b", bgcolor: "#fff", textTransform: "none", fontWeight: 900 }}>Delete permanently</Button>
+                      </Box>
+                    ))}
+                    {!deletedGalleryPhotos.length && <Typography sx={{ color: "#667085" }}>No deleted gallery photos pending review.</Typography>}
+                  </Stack>
+                </Box>
               )}
             </Paper>
             )}
