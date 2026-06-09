@@ -1,4 +1,5 @@
 import { API_BASE_URL, DEPLOYED_API_BASE_URL, LOCAL_API_BASE_URL } from "../config/api";
+import { getAuthHeaders } from "./authApi";
 
 export const NEWS_ENDPOINT = `${API_BASE_URL}/api/news`;
 export const POSTS_ENDPOINT = `${API_BASE_URL}/api/posts`;
@@ -6,6 +7,7 @@ export const PAST_EDITIONS_ENDPOINT = `${API_BASE_URL}/api/past-editions`;
 export const TESTIMONIES_ENDPOINT = `${API_BASE_URL}/api/testimonies`;
 export const INTERVIEWS_ENDPOINT = `${API_BASE_URL}/api/interviews`;
 export const PHOTO_GALLERY_ENDPOINT = `${API_BASE_URL}/api/photo-gallery`;
+export const COMPENDIUM_ENDPOINT = `${API_BASE_URL}/api/compendium`;
 export const UPCOMING_EVENTS_ENDPOINTS = [
   `${API_BASE_URL}/api/upcoming-events`,
   `${API_BASE_URL}/api/events`,
@@ -98,6 +100,28 @@ export type StoryReadersPayload = {
   contentType: "post" | "news" | "event";
   contentId: string;
   readers: number;
+};
+
+export type CompendiumMessageKind = "interview" | "tribute" | "goodwill" | "congratulatory";
+
+export type CompendiumResponse = {
+  prompt: string;
+  answer: string;
+};
+
+export type CompendiumSubmission = {
+  _id?: string;
+  messageType: CompendiumMessageKind;
+  fullName: string;
+  email: string;
+  phone: string;
+  organization?: string;
+  headline?: string;
+  message?: string;
+  advertRate?: string;
+  responses?: CompendiumResponse[];
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 const normalizeNewsItem = (item: NewsItem): NewsItem => ({
@@ -301,3 +325,37 @@ export const incrementStoryReaders = async (contentType: "post" | "news" | "even
     "Unable to update reader count."
   );
 };
+
+export const submitCompendiumMessage = async (payload: {
+  messageType: CompendiumMessageKind;
+  fullName: string;
+  email: string;
+  phone: string;
+  organization?: string;
+  headline?: string;
+  message?: string;
+  advertRate?: string;
+  responses?: CompendiumResponse[];
+}) =>
+  requestJson<{ message: string; submission: CompendiumSubmission }>(
+    [COMPENDIUM_ENDPOINT],
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    "Unable to submit commemorative message."
+  );
+
+export const loadCompendiumSubmissions = async () =>
+  normalizeCollection<CompendiumSubmission>(
+    await requestJson<unknown>(
+      [COMPENDIUM_ENDPOINT],
+      (() => {
+        const headers = new Headers();
+        Object.entries(getAuthHeaders()).forEach(([key, value]) => headers.set(key, value));
+        return { headers };
+      })(),
+      "Unable to load commemorative submissions."
+    )
+  );

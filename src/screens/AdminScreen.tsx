@@ -51,6 +51,8 @@ import {
   PAST_EDITIONS_ENDPOINT,
   PHOTO_GALLERY_ENDPOINT,
   TESTIMONIES_ENDPOINT,
+  loadCompendiumSubmissions,
+  type CompendiumSubmission as CompendiumSubmissionType,
 } from "../services/contentApi";
 import { shareContent } from "../utils/share";
 import { useAuth } from "../context/useAuth";
@@ -169,6 +171,8 @@ type GalleryPhoto = {
   createdAt?: string;
 };
 
+type CommemorativeSubmission = CompendiumSubmissionType;
+
 type Feedback = {
   severity: "success" | "error";
   message: string;
@@ -203,6 +207,7 @@ type ActiveView =
   | "testimonies"
   | "interviews"
   | "photoGallery"
+  | "compendium"
   | "adminRequests"
   | "permissionRequests"
   | "users"
@@ -222,6 +227,7 @@ const navItems = [
   { id: "testimonies", label: "Testimonies", icon: <AutoStories fontSize="small" /> },
   { id: "interviews", label: "Interviews", icon: <Article fontSize="small" /> },
   { id: "photoGallery", label: "Photo Gallery", icon: <PhotoLibrary fontSize="small" /> },
+  { id: "compendium", label: "Commemorative", icon: <AutoStories fontSize="small" /> },
   { id: "adminRequests", label: "Admin Requests", icon: <AdminPanelSettings fontSize="small" /> },
   { id: "permissionRequests", label: "Blogger Requests", icon: <AdminPanelSettings fontSize="small" /> },
   { id: "users", label: "Users", icon: <AdminPanelSettings fontSize="small" /> },
@@ -261,6 +267,10 @@ const viewCopy: Record<ActiveView, { title: string; subtitle: string }> = {
   photoGallery: {
     title: "Photo Gallery",
     subtitle: "Upload images that appear in the homepage photo gallery carousel.",
+  },
+  compendium: {
+    title: "King Sunny Ade @ 80",
+    subtitle: "Review commemorative submissions, interviews, tributes, and advert messages.",
   },
   adminRequests: {
     title: "Admin Requests",
@@ -610,6 +620,7 @@ const AdminScreen: React.FC = () => {
   const [galleryPhotos, setGalleryPhotos] = useState<GalleryPhoto[]>([]);
   const [deletedGalleryPhotos, setDeletedGalleryPhotos] = useState<GalleryPhoto[]>([]);
   const [messages, setMessages] = useState<ContactMessage[]>([]);
+  const [compendiumSubmissions, setCompendiumSubmissions] = useState<CommemorativeSubmission[]>([]);
   const [adminRequests, setAdminRequests] = useState<AuthUser[]>([]);
   const [permissionRequests, setPermissionRequests] = useState<AuthUser[]>([]);
   const [users, setUsers] = useState<AuthUser[]>([]);
@@ -761,7 +772,7 @@ const AdminScreen: React.FC = () => {
   const visibleNavItems = useMemo(
     () =>
       navItems.filter((item) => {
-        if (["adminRequests", "permissionRequests", "users", "activity", "messages"].includes(item.id)) {
+        if (["adminRequests", "permissionRequests", "users", "activity", "messages", "compendium"].includes(item.id)) {
           return isOwnerAdmin;
         }
 
@@ -824,6 +835,7 @@ const AdminScreen: React.FC = () => {
       postResult,
       eventResult,
       messageResult,
+      compendiumResult,
       newsResult,
       deletedNewsResult,
       pastEditionResult,
@@ -846,6 +858,14 @@ const AdminScreen: React.FC = () => {
       isOwnerAdmin
         ? requestCollection<ContactMessage>(CONTACT_ENDPOINTS, "Unable to load contact messages.")
         : Promise.resolve({ items: [] as ContactMessage[], error: "" }),
+      isOwnerAdmin
+        ? loadCompendiumSubmissions()
+            .then((items) => ({ items, error: "" }))
+            .catch((error) => ({
+              items: [] as CommemorativeSubmission[],
+              error: error instanceof Error ? error.message : "Unable to load commemorative submissions.",
+            }))
+        : Promise.resolve({ items: [] as CommemorativeSubmission[], error: "" }),
       requestCollection<NewsItem>([NEWS_ENDPOINT], "Unable to load news."),
       isOwnerAdmin
         ? requestCollection<NewsItem>([DELETED_NEWS_ENDPOINT], "Unable to load deleted news.")
@@ -912,6 +932,7 @@ const AdminScreen: React.FC = () => {
     setEvents(eventResult.items);
     setDeletedEvents(deletedEventsResult.items);
     setMessages(messageResult.items);
+    setCompendiumSubmissions(compendiumResult.items);
     setPastEditions(pastEditionResult.items);
     setDeletedPastEditions(deletedPastEditionsResult.items);
     setTestimonies(testimonyResult.items);
@@ -933,6 +954,7 @@ const AdminScreen: React.FC = () => {
       postResult.error && "blogs",
       eventResult.error && "events",
       messageResult.error && "messages",
+      compendiumResult.error && "commemorative submissions",
       newsResult.error && "news",
       deletedNewsResult.error && "deleted news",
       pastEditionResult.error && "past editions",
@@ -2666,8 +2688,9 @@ const AdminScreen: React.FC = () => {
                   { label: "Past edition images", value: pastEditions.length, icon: <PhotoLibrary /> },
                   { label: "Testimonies", value: testimonies.length, icon: <AutoStories /> },
                   { label: "Interviews", value: interviews.length, icon: <Article /> },
-                  { label: "Gallery photos", value: galleryPhotos.length, icon: <PhotoLibrary /> },
-                  { label: "Admin requests", value: adminRequests.length, icon: <AdminPanelSettings /> },
+                { label: "Gallery photos", value: galleryPhotos.length, icon: <PhotoLibrary /> },
+                { label: "Commemorative", value: compendiumSubmissions.length, icon: <AutoStories /> },
+                { label: "Admin requests", value: adminRequests.length, icon: <AdminPanelSettings /> },
                   { label: "Contact messages", value: messages.length, icon: <Mail /> },
                 ].map((item) => (
                   <Paper key={item.label} elevation={0} sx={{ p: 2.25, border: "1px solid #e6e8ec", borderRadius: 2 }}>
@@ -2777,7 +2800,8 @@ const AdminScreen: React.FC = () => {
             activeView === "pastEditions" ||
             activeView === "testimonies" ||
             activeView === "interviews" ||
-            activeView === "photoGallery") && (
+            activeView === "photoGallery" ||
+            activeView === "compendium") && (
           <Box
             sx={{
               display: "grid",
@@ -4726,6 +4750,96 @@ const AdminScreen: React.FC = () => {
                   </Stack>
                 </Box>
               )}
+            </Paper>
+            )}
+
+            {activeView === "compendium" && isOwnerAdmin && (
+            <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid #e6e8ec", borderRadius: 2 }}>
+              <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2, mb: 2, alignItems: { xs: "flex-start", md: "center" }, flexDirection: { xs: "column", md: "row" } }}>
+                <Box>
+                  <Typography variant="h6" sx={{ fontWeight: 900 }}>
+                    Commemorative submissions
+                  </Typography>
+                  <Typography sx={{ color: "#667085", mt: 0.5 }}>
+                    Public entries from the King Sunny Ade @ 80 page.
+                  </Typography>
+                </Box>
+                <Chip size="small" label={`${compendiumSubmissions.length} total`} sx={{ bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 900 }} />
+              </Box>
+
+              <Stack spacing={1.5}>
+                {compendiumSubmissions.map((submission) => (
+                  <Box
+                    key={submission._id || `${submission.email}-${submission.createdAt}`}
+                    sx={{
+                      border: "1px solid #edf0f2",
+                      borderRadius: 1.5,
+                      p: { xs: 1.5, md: 2 },
+                      bgcolor: "#fff",
+                    }}
+                  >
+                    <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2, flexDirection: { xs: "column", md: "row" }, mb: 1 }}>
+                      <Box>
+                        <Typography sx={{ fontWeight: 900, color: "#171a20" }}>
+                          {submission.fullName}
+                        </Typography>
+                        <Typography sx={{ color: "#667085", fontSize: 13 }}>
+                          {submission.email} - {submission.phone}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ textAlign: { xs: "left", md: "right" } }}>
+                        <Chip
+                          size="small"
+                          label={submission.messageType.replaceAll("_", " ")}
+                          sx={{ bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 900, mb: 0.5 }}
+                        />
+                        <Typography sx={{ color: "#98a2b3", fontSize: 13 }}>
+                          {formatDate(submission.createdAt)}
+                        </Typography>
+                      </Box>
+                    </Box>
+
+                    {submission.organization && (
+                      <Typography sx={{ color: "#475467", fontSize: 14, mb: 0.8 }}>
+                        Organization: {submission.organization}
+                      </Typography>
+                    )}
+                    {submission.headline && (
+                      <Typography sx={{ color: "#475467", fontSize: 14, mb: 0.8 }}>
+                        Headline: {submission.headline}
+                      </Typography>
+                    )}
+                    {submission.advertRate && (
+                      <Typography sx={{ color: "#475467", fontSize: 14, mb: 0.8 }}>
+                        Advert rate: {submission.advertRate}
+                      </Typography>
+                    )}
+
+                    {submission.messageType === "interview" ? (
+                      <Stack spacing={1}>
+                        {submission.responses?.map((response, index) => (
+                          <Box key={`${submission._id || index}-${index}`} sx={{ p: 1.25, borderRadius: 1.25, bgcolor: "#f9fafb", border: "1px solid #edf0f2" }}>
+                            <Typography sx={{ fontWeight: 800, color: "#101828", mb: 0.5 }}>
+                              {index + 1}. {response.prompt}
+                            </Typography>
+                            <Typography sx={{ color: "#475467", whiteSpace: "pre-wrap" }}>
+                              {response.answer || "No answer provided."}
+                            </Typography>
+                          </Box>
+                        ))}
+                      </Stack>
+                    ) : (
+                      <Typography sx={{ color: "#475467", whiteSpace: "pre-wrap", lineHeight: 1.75 }}>
+                        {submission.message || "No message provided."}
+                      </Typography>
+                    )}
+                  </Box>
+                ))}
+
+                {!compendiumSubmissions.length && !isLoading && (
+                  <Typography sx={{ color: "#667085" }}>No commemorative submissions returned from the API yet.</Typography>
+                )}
+              </Stack>
             </Paper>
             )}
 

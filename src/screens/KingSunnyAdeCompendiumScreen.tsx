@@ -18,6 +18,7 @@ import WhatsAppIcon from "@mui/icons-material/WhatsApp";
 import AutoStoriesIcon from "@mui/icons-material/AutoStories";
 import kingImage from "../assets/king.jpeg";
 import Footer from "../components/Footer";
+import { submitCompendiumMessage, type CompendiumMessageKind } from "../services/contentApi";
 
 const gold = "#B58B2A";
 const deepNavy = "#0B1220";
@@ -33,9 +34,7 @@ const interviewPrompts = [
   "A perfect description of KSA",
 ];
 
-type MessageKind = "interview" | "tribute" | "goodwill" | "congratulatory";
-
-const messageKindLabel: Record<MessageKind, string> = {
+const messageKindLabel: Record<CompendiumMessageKind, string> = {
   interview: "Interview",
   tribute: "Tribute",
   goodwill: "Goodwill Message",
@@ -46,7 +45,7 @@ const buildMailtoHref = (subject: string, body: string) =>
   `mailto:${emailAddress}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
 const KingSunnyAdeCompendiumScreen: React.FC = () => {
-  const [kind, setKind] = useState<MessageKind>("congratulatory");
+  const [kind, setKind] = useState<CompendiumMessageKind>("congratulatory");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ severity: "success" | "error"; message: string } | null>(null);
 
@@ -78,6 +77,18 @@ const KingSunnyAdeCompendiumScreen: React.FC = () => {
       answer: String(formData.get(`answer_${index}`) || "").trim(),
     }));
 
+    const submissionPayload = {
+      messageType: kind as CompendiumMessageKind,
+      fullName,
+      email,
+      phone,
+      organization,
+      headline,
+      message: kind === "interview" ? "" : message,
+      advertRate,
+      responses: kind === "interview" ? interviewAnswers : [],
+    };
+
     const bodyLines = [
       "King Sunny Ade @ 80 - Commemorative Compendium",
       "",
@@ -108,6 +119,7 @@ const KingSunnyAdeCompendiumScreen: React.FC = () => {
 
     setIsSubmitting(true);
     try {
+      await submitCompendiumMessage(submissionPayload);
       window.location.href = buildMailtoHref(mailtoSubject, bodyLines);
       form.reset();
       setKind("congratulatory");
@@ -279,7 +291,7 @@ const KingSunnyAdeCompendiumScreen: React.FC = () => {
                     name="kind"
                     label="Choose message type"
                     value={kind}
-                    onChange={(event) => setKind(event.target.value as MessageKind)}
+                    onChange={(event) => setKind(event.target.value as CompendiumMessageKind)}
                     fullWidth
                     sx={{
                       "& .MuiOutlinedInput-root": { color: "#fff" },
