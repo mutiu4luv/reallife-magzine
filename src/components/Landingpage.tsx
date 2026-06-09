@@ -11,7 +11,7 @@ import Pastedition from "./Pastedition"
 import LatestUpdates from "./LatestUpdates"
 const Landingpage = () => {
   return (
-    <div>
+    <div style={{ position: "relative" }}>
       <MarqueeBar />
       <Hero />
       <LatestUpdates />

@@ -17,6 +17,8 @@ import EmailOutlinedIcon from "@mui/icons-material/EmailOutlined";
 import WhatsAppIcon from "@mui/icons-material/WhatsApp";
 import AutoStoriesIcon from "@mui/icons-material/AutoStories";
 import kingImage from "../assets/king.jpeg";
+import authorizeImage from "../assets/authorize.jpeg";
+import authorized2Image from "../assets/authorized2.jpeg";
 import Footer from "../components/Footer";
 import { submitCompendiumMessage, type CompendiumMessageKind } from "../services/contentApi";
 
@@ -43,6 +45,12 @@ const messageKindLabel: Record<CompendiumMessageKind, string> = {
 
 const buildMailtoHref = (subject: string, body: string) =>
   `mailto:${emailAddress}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+const authorizationHighlights = [
+  "Official mandate to compile, produce, print, publish, market, and distribute the commemorative compendium.",
+  "Authority to gather interviews, photographs, tributes, adverts, sponsorships, articles, and historical materials.",
+  "Launch, sales, and revenue management aligned with the agreed framework.",
+];
 
 const KingSunnyAdeCompendiumScreen: React.FC = () => {
   const [kind, setKind] = useState<CompendiumMessageKind>("congratulatory");
@@ -226,6 +234,98 @@ const KingSunnyAdeCompendiumScreen: React.FC = () => {
         </Box>
 
         <Container maxWidth="lg" sx={{ py: { xs: 4, md: 6 } }}>
+          <Paper
+            elevation={0}
+            sx={{
+              mb: 3,
+              p: { xs: 2.5, md: 4 },
+              bgcolor: "#10192b",
+              color: "#fff",
+              borderRadius: 2,
+              border: "1px solid rgba(255,255,255,0.08)",
+            }}
+          >
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", lg: "1.05fr 0.95fr" },
+                gap: { xs: 2.5, md: 3 },
+                alignItems: "start",
+              }}
+            >
+              <Box>
+                <Typography sx={{ color: "#f5e2b8", fontWeight: 900, letterSpacing: 0.6, mb: 1 }}>
+                  Authorization Letter
+                </Typography>
+                <Typography variant="h4" sx={{ fontWeight: 950, lineHeight: 1.1, mb: 2 }}>
+                  Official authorization to compile and publish the Special Commemorative Compendium
+                </Typography>
+                <Typography sx={{ color: "#d7deea", lineHeight: 1.9, mb: 2 }}>
+                  RealityLife Magazine has been duly authorised to compile, produce, print, publish, market and
+                  distribute the official commemorative compendium for King Sunny Ade @ 80. The mandate includes
+                  interviews, tributes, photographs, adverts, sponsorships, historical materials, and launch-related
+                  management for the project lifecycle.
+                </Typography>
+                <Stack spacing={1.1} sx={{ mb: 2 }}>
+                  {authorizationHighlights.map((item) => (
+                    <Box key={item} sx={{ display: "flex", gap: 1.1, alignItems: "flex-start" }}>
+                      <AutoStoriesIcon sx={{ color: "#f5e2b8", mt: 0.2 }} />
+                      <Typography sx={{ color: "#eef3fb", lineHeight: 1.7 }}>{item}</Typography>
+                    </Box>
+                  ))}
+                </Stack>
+                <Typography sx={{ color: "#f5e2b8", fontWeight: 800, mb: 0.75 }}>
+                  Why this matters
+                </Typography>
+                <Typography sx={{ color: "#d7deea", lineHeight: 1.8 }}>
+                  This section helps subscribers and sponsors see the project as official, structured, and credible.
+                  It strengthens confidence before they submit messages, adverts, or sponsorship support.
+                </Typography>
+              </Box>
+
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" },
+                  gap: 1.5,
+                }}
+              >
+                {[authorizeImage, authorized2Image].map((image, index) => (
+                  <Paper
+                    key={image}
+                    elevation={0}
+                    sx={{
+                      overflow: "hidden",
+                      borderRadius: { xs: 2, md: "50%" },
+                      bgcolor: "#ffffff",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      mx: "auto",
+                      width: { xs: "100%", md: 260 },
+                      maxWidth: { xs: "100%", md: 260 },
+                      aspectRatio: { xs: "4 / 5", md: "1 / 1" },
+                      p: { xs: 0, md: 1.25 },
+                    }}
+                  >
+                    <Box
+                      component="img"
+                      src={image}
+                      alt={index === 0 ? "Authorization letter" : "Authorization support letter"}
+                      loading="lazy"
+                      decoding="async"
+                      sx={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "contain",
+                        display: "block",
+                        borderRadius: { xs: 0, md: "50%" },
+                      }}
+                    />
+                  </Paper>
+                ))}
+              </Box>
+            </Box>
+          </Paper>
+
           <Box
             sx={{
               display: "grid",
