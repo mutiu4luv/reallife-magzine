@@ -5,7 +5,6 @@ import {
   Chip,
   Container,
   Divider,
-  Grid,
   IconButton,
   Link,
   Stack,
@@ -125,7 +124,7 @@ const Footer: React.FC = () => {
               and social impact stories that deserve to be seen, remembered, and shared.
             </Typography>
 
-            <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 2.75 }}>
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 2.75 }}>
               {[
                 "Culture",
                 "Leadership",
@@ -144,7 +143,7 @@ const Footer: React.FC = () => {
                   }}
                 />
               ))}
-            </Stack>
+            </Box>
 
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
               <Button
@@ -281,8 +280,15 @@ const Footer: React.FC = () => {
           </Box>
         </Box>
 
-        <Grid container spacing={3.5} sx={{ mt: { xs: 3.5, md: 4.5 } }}>
-          <Grid item xs={12} md={5}>
+        <Box
+          sx={{
+            mt: { xs: 3.5, md: 4.5 },
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", md: "1.05fr 0.9fr 0.75fr" },
+            gap: { xs: 3, md: 3.5 },
+          }}
+        >
+          <Box>
             <Typography sx={{ color: softGold, fontWeight: 900, mb: 1.5 }}>
               Connect with us
             </Typography>
@@ -300,7 +306,7 @@ const Footer: React.FC = () => {
               </Typography>
             </Stack>
 
-            <Stack direction="row" spacing={1.1} useFlexGap flexWrap="wrap">
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.1 }}>
               <Button
                 component="a"
                 href="mailto:realitylifemagazine@gmail.com"
@@ -340,10 +346,10 @@ const Footer: React.FC = () => {
               >
                 WhatsApp
               </Button>
-            </Stack>
-          </Grid>
+            </Box>
+          </Box>
 
-          <Grid item xs={12} md={4}>
+          <Box>
             <Typography sx={{ color: softGold, fontWeight: 900, mb: 1.5 }}>
               Follow our journey
             </Typography>
@@ -376,9 +382,9 @@ const Footer: React.FC = () => {
                 </IconButton>
               ))}
             </Box>
-          </Grid>
+          </Box>
 
-          <Grid item xs={12} md={3}>
+          <Box>
             <Typography sx={{ color: softGold, fontWeight: 900, mb: 1.5 }}>
               Editorial promise
             </Typography>
@@ -412,8 +418,8 @@ const Footer: React.FC = () => {
                 </Box>
               ))}
             </Stack>
-          </Grid>
-        </Grid>
+          </Box>
+        </Box>
 
         <Divider sx={{ my: { xs: 4, md: 5 }, borderColor: "rgba(255,255,255,0.08)" }} />
 
