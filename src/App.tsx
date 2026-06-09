@@ -15,6 +15,7 @@ import UserDashboardScreen from "./screens/UserDashboardScreen";
 import NewsScreen from "./screens/NewsScreen";
 import UpcomingEventsScreen from "./screens/UpcomingEventsScreen";
 import ContentDetailScreen from "./screens/ContentDetailScreen";
+import KingSunnyAdeCompendiumScreen from "./screens/KingSunnyAdeCompendiumScreen";
 import { useAuth } from "./context/useAuth";
 import { hasAnyPermission } from "./services/authApi";
 
@@ -68,6 +69,7 @@ function App() {
         <Route path="/news/:id" element={<ContentDetailScreen kind="news" />} />
         <Route path="/events" element={<UpcomingEventsScreen />} />
         <Route path="/events/:id" element={<ContentDetailScreen kind="event" />} />
+        <Route path="/king--Sunny-Ade-@80" element={<KingSunnyAdeCompendiumScreen />} />
         <Route path="/login" element={<AuthScreen mode="login" />} />
         <Route path="/register" element={<AuthScreen mode="register" />} />
         <Route path="/dashboard" element={<UserDashboardScreen />} />
