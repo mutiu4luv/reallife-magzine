@@ -413,6 +413,10 @@ const KingSunnyAdeCompendiumScreen: React.FC = () => {
                       words of appreciation, and prayers as we celebrate 80 years of excellence, music, and legacy.
                     </Typography>
                   </Box>
+
+                  <Typography sx={{ color: "#f5e2b8", fontWeight: 900, mb: 0.75 }}>
+                    Fill the form below to be a part of this memorable event, together let's document history for the next generation
+                  </Typography>
                 </Box>
 
                 <Divider sx={{ borderColor: "rgba(255,255,255,0.08)" }} />
