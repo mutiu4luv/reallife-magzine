@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   Box,
@@ -6,16 +6,14 @@ import {
   Chip,
   Container,
   Paper,
+  ButtonBase,
   Snackbar,
   Stack,
   TextField,
   Typography,
 } from "@mui/material";
-import AutoStoriesIcon from "@mui/icons-material/AutoStories";
 import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
-import DownloadIcon from "@mui/icons-material/Download";
 import LockIcon from "@mui/icons-material/Lock";
-import PaymentIcon from "@mui/icons-material/Payment";
 import VerifiedIcon from "@mui/icons-material/Verified";
 import { useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
@@ -23,7 +21,6 @@ import { useAuth } from "../context/useAuth";
 import { loadMagazines, type PostItem } from "../services/contentApi";
 
 const pageBg = "#070B14";
-const panelBg = "#0F172A";
 const gold = "#C9A24A";
 const ivory = "#F8F2E8";
 const muted = "#CBD5E1";
@@ -41,6 +38,8 @@ const MagazineScreen: React.FC = () => {
   const navigate = useNavigate();
   const { user, requestMagazine } = useAuth();
   const [magazines, setMagazines] = useState<PostItem[]>([]);
+  const [pageMeta, setPageMeta] = useState({ page: 1, limit: 8, total: 0, hasMore: false });
+  const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState<{ severity: "success" | "error"; message: string } | null>(null);
   const [reference, setReference] = useState("");
@@ -52,13 +51,16 @@ const MagazineScreen: React.FC = () => {
     let mounted = true;
 
     const loadMagazineIssues = async () => {
+      setLoading(true);
       try {
-        const items = await loadMagazines();
+        const { items, meta } = await loadMagazines(currentPage, 8);
         if (!mounted) return;
         setMagazines(items);
+        setPageMeta(meta);
       } catch {
         if (mounted) {
           setMagazines([]);
+          setPageMeta({ page: currentPage, limit: 8, total: 0, hasMore: false });
         }
       } finally {
         if (mounted) {
@@ -72,20 +74,10 @@ const MagazineScreen: React.FC = () => {
     return () => {
       mounted = false;
     };
-  }, []);
-
-  const featuredIssue = useMemo(() => magazines[0] || null, [magazines]);
+  }, [currentPage]);
 
   const magazineAccessStatus = user?.magazineAccessStatus || "none";
   const canDownload = magazineAccessStatus === "approved";
-  const accessLabel =
-    magazineAccessStatus === "approved"
-      ? "Approved access"
-      : magazineAccessStatus === "pending"
-        ? "Payment awaiting approval"
-        : magazineAccessStatus === "rejected"
-          ? "Payment rejected"
-          : "Download locked";
 
   const handleRequestAccess = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -171,6 +163,12 @@ const MagazineScreen: React.FC = () => {
     }
   };
 
+  const handleCoverClick = (item: PostItem) => {
+    void openDownload(item);
+  };
+
+  const pageCount = Math.max(1, Math.ceil(pageMeta.total / pageMeta.limit));
+
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: pageBg, color: ivory }}>
       <Box sx={{ ...shellEffect, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
@@ -190,16 +188,16 @@ const MagazineScreen: React.FC = () => {
                 maxWidth: 880,
               }}
             >
-              Read, browse, and unlock RealityLife Magazine issues
+              RealityLife Magazine
             </Typography>
             <Typography sx={{ color: "#d6deea", lineHeight: 1.9, maxWidth: 820, fontSize: { xs: 16, md: 18 } }}>
-              A premium editorial storefront for cover previews, archival issues, and approved PDF downloads. Browse
-              the latest editions, submit payment proof, and unlock the full magazine after admin approval.
+              Browse the latest covers in a premium digital newsstand. Register or log in to unlock downloads after
+              your payment has been approved.
             </Typography>
 
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
               <Button
-                onClick={() => document.getElementById("magazine-catalog")?.scrollIntoView({ behavior: "smooth" })}
+                onClick={() => document.getElementById("magazines-grid")?.scrollIntoView({ behavior: "smooth" })}
                 sx={{
                   bgcolor: gold,
                   color: "#141008",
@@ -232,130 +230,12 @@ const MagazineScreen: React.FC = () => {
         <Box
           sx={{
             display: "grid",
-            gridTemplateColumns: { xs: "1fr", lg: "1.05fr 0.95fr" },
+            gridTemplateColumns: { xs: "1fr", lg: "0.95fr 1.05fr" },
             gap: { xs: 2.5, md: 3 },
             alignItems: "start",
             mb: 4,
           }}
         >
-          <Paper
-            elevation={0}
-            sx={{
-              overflow: "hidden",
-              bgcolor: panelBg,
-              border: "1px solid rgba(255,255,255,0.08)",
-              borderRadius: 3,
-              p: { xs: 2.5, md: 3 },
-            }}
-          >
-            <Stack spacing={2}>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1.2 }}>
-                <AutoStoriesIcon sx={{ color: gold }} />
-                <Typography sx={{ fontWeight: 900, color: "#fff" }}>Current edition</Typography>
-              </Box>
-              {featuredIssue ? (
-                <Box
-                  sx={{
-                    display: "grid",
-                    gridTemplateColumns: { xs: "1fr", md: "280px 1fr" },
-                    gap: 2.5,
-                    alignItems: "center",
-                  }}
-                >
-                  <Box
-                    component="img"
-                    src={featuredIssue.coverImage || featuredIssue.image}
-                    alt={featuredIssue.title}
-                    sx={{
-                      width: "100%",
-                      aspectRatio: "4 / 5",
-                      objectFit: "cover",
-                      borderRadius: 2,
-                      border: "1px solid rgba(255,255,255,0.12)",
-                    }}
-                  />
-                  <Stack spacing={1.5}>
-                    <Typography sx={{ color: "#f7e3bc", fontWeight: 900, letterSpacing: 0.4 }}>
-                      Featured release
-                    </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 950, lineHeight: 1.1 }}>
-                      {featuredIssue.title}
-                    </Typography>
-                    <Typography sx={{ color: muted, lineHeight: 1.85 }}>
-                      {featuredIssue.desc || "A premium magazine issue with a secure full download for approved readers."}
-                    </Typography>
-                    <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
-                      <Chip
-                        icon={canDownload ? <VerifiedIcon /> : <LockIcon />}
-                        label={accessLabel}
-                        sx={{
-                          bgcolor: canDownload ? "rgba(18,55,42,0.32)" : "rgba(201,162,74,0.16)",
-                          color: canDownload ? "#bbf7d0" : "#f7ddad",
-                          fontWeight: 800,
-                        }}
-                      />
-                      <Chip
-                        icon={<PaymentIcon />}
-                        label={`Pay to ${accountNumber}`}
-                        sx={{ bgcolor: "rgba(255,255,255,0.08)", color: "#fff", fontWeight: 800 }}
-                      />
-                    </Stack>
-                    <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
-                      <Button
-                        onClick={() => void openDownload(featuredIssue)}
-                        disabled={loading || Boolean(unlockingId) || !canDownload}
-                        startIcon={canDownload ? <DownloadIcon /> : <LockIcon />}
-                        sx={{
-                          bgcolor: canDownload ? gold : "rgba(255,255,255,0.08)",
-                          color: canDownload ? "#120d02" : "#fff",
-                          textTransform: "none",
-                          fontWeight: 900,
-                          "&:hover": { bgcolor: canDownload ? "#e2bb5a" : "rgba(255,255,255,0.12)" },
-                        }}
-                      >
-                        {canDownload ? "Download issue" : "Download locked"}
-                      </Button>
-                      <Button
-                        onClick={() => document.getElementById("payment-gate")?.scrollIntoView({ behavior: "smooth" })}
-                        sx={{
-                          border: "1px solid rgba(255,255,255,0.18)",
-                          color: "#fff",
-                          textTransform: "none",
-                          fontWeight: 800,
-                        }}
-                      >
-                        Get access
-                      </Button>
-                    </Stack>
-                  </Stack>
-                </Box>
-              ) : (
-                <Paper
-                  elevation={0}
-                  sx={{
-                    p: 2.5,
-                    borderRadius: 2.5,
-                    bgcolor: "rgba(255,255,255,0.03)",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                  }}
-                >
-                  <Stack spacing={1.25}>
-                    <Typography sx={{ color: "#fff", fontWeight: 900, fontSize: 18 }}>
-                      New editions are being prepared
-                    </Typography>
-                    <Typography sx={{ color: muted, lineHeight: 1.85 }}>
-                      The magazine archive will appear here as soon as the next issue is published. Each cover is shown
-                      first, and the full PDF becomes available only after payment approval.
-                    </Typography>
-                    <Typography sx={{ color: "#f7ddad", fontWeight: 700 }}>
-                      Readers can still review the payment details below and prepare their access request.
-                    </Typography>
-                  </Stack>
-                </Paper>
-              )}
-            </Stack>
-          </Paper>
-
           <Paper
             id="payment-gate"
             elevation={0}
@@ -389,15 +269,14 @@ const MagazineScreen: React.FC = () => {
                   admin approval, your download button unlocks automatically.
                 </Typography>
                 <Typography sx={{ color: "#cbd5e1", mt: 1.25 }}>
-                  WhatsApp receipt line: <Box component="span" sx={{ color: "#fff", fontWeight: 900 }}>{receiptLine}</Box>
+                  WhatsApp receipt line:{" "}
+                  <Box component="span" sx={{ color: "#fff", fontWeight: 900 }}>
+                    {receiptLine}
+                  </Box>
                 </Typography>
               </Box>
 
-              <Box
-                component="form"
-                onSubmit={handleRequestAccess}
-                sx={{ display: "grid", gap: 1.5 }}
-              >
+              <Box component="form" onSubmit={handleRequestAccess} sx={{ display: "grid", gap: 1.5 }}>
                 {!user && (
                   <Alert severity="info" sx={{ bgcolor: "rgba(255,255,255,0.04)", color: "#fff" }}>
                     Sign in first so we can link your payment proof to your account.
@@ -445,10 +324,38 @@ const MagazineScreen: React.FC = () => {
               </Box>
             </Stack>
           </Paper>
+
+          <Box
+            sx={{
+              display: "grid",
+              gap: 2,
+              alignContent: "start",
+            }}
+          >
+            <Paper
+              elevation={0}
+              sx={{
+                p: { xs: 2.5, md: 3 },
+                borderRadius: 3,
+                bgcolor: "rgba(255,255,255,0.03)",
+                border: "1px solid rgba(255,255,255,0.08)",
+              }}
+            >
+              <Stack spacing={1.25}>
+                <Typography sx={{ color: "#fff", fontWeight: 900, fontSize: 18 }}>
+                  Download your magazine by tapping the cover
+                </Typography>
+                <Typography sx={{ color: muted, lineHeight: 1.85 }}>
+                  If you are not logged in, the cover will prompt you to register or log in before downloading. Approved
+                  readers can tap any cover to open the document instantly.
+                </Typography>
+              </Stack>
+            </Paper>
+          </Box>
         </Box>
 
         <Paper
-          id="magazine-catalog"
+          id="magazines-grid"
           elevation={0}
           sx={{
             p: { xs: 2.5, md: 3 },
@@ -460,22 +367,20 @@ const MagazineScreen: React.FC = () => {
         >
           <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2, mb: 2.5, alignItems: "center" }}>
             <Box>
-              <Typography sx={{ color: "#fff", fontWeight: 900, fontSize: { xs: 22, md: 28 } }}>
-                Issue archive
-              </Typography>
+              <Typography sx={{ color: "#fff", fontWeight: 900, fontSize: { xs: 22, md: 28 } }}>Magazines</Typography>
               <Typography sx={{ color: muted, mt: 0.75 }}>
-                A clean digital storefront for covers, archives, and premium downloads.
+                A clean digital storefront for covers and premium downloads.
               </Typography>
             </Box>
             <Chip
-              label={magazines.length ? `${magazines.length} issues` : "Curated archive"}
+              label={pageMeta.total ? `${pageMeta.total} magazines` : "No magazines yet"}
               sx={{ bgcolor: "rgba(201,162,74,0.16)", color: "#f7ddad", fontWeight: 900 }}
             />
           </Box>
 
           {loading ? (
             <Box sx={{ py: 8, display: "grid", placeItems: "center" }}>
-              <Typography sx={{ color: "#fff", fontWeight: 800 }}>Loading magazine issues...</Typography>
+              <Typography sx={{ color: "#fff", fontWeight: 800 }}>Loading magazines...</Typography>
             </Box>
           ) : magazines.length ? (
             <Box
@@ -486,13 +391,19 @@ const MagazineScreen: React.FC = () => {
                   sm: "repeat(2, minmax(0, 1fr))",
                   lg: "repeat(3, minmax(0, 1fr))",
                 },
-                gap: 2.5,
+                gap: 2.25,
               }}
             >
               {magazines.map((issue, index) => {
                 const issueKey = issue._id || `${issue.title}-${index}`;
                 const locked = !canDownload;
                 const coverSrc = issue.coverImage || issue.image;
+                const isLatest = currentPage === 1 && index === 0;
+                const coverLabel = !user
+                  ? "Login or register to download"
+                  : canDownload
+                    ? "Tap cover to download"
+                    : "Payment approved to unlock";
 
                 return (
                   <Paper
@@ -500,70 +411,81 @@ const MagazineScreen: React.FC = () => {
                     elevation={0}
                     sx={{
                       overflow: "hidden",
-                      bgcolor: "#10192b",
-                      border: "1px solid rgba(255,255,255,0.08)",
-                      borderRadius: 3,
+                      bgcolor: "#0e1524",
+                      border: "1px solid rgba(255,255,255,0.09)",
+                      borderRadius: 4,
+                      boxShadow: "0 18px 40px rgba(0,0,0,0.32)",
                       display: "grid",
                     }}
                   >
-                    <Box sx={{ position: "relative" }}>
-                      <Box
-                        component="img"
-                        src={coverSrc}
-                        alt={issue.title}
-                        sx={{
-                          width: "100%",
-                          aspectRatio: "4 / 5",
-                          objectFit: "cover",
-                          display: "block",
-                        }}
-                      />
-                      <Chip
-                        icon={locked ? <LockIcon /> : <VerifiedIcon />}
-                        label={locked ? "Locked" : "Available"}
-                        sx={{
-                          position: "absolute",
-                          top: 14,
-                          left: 14,
-                          bgcolor: locked ? "rgba(12,18,33,0.82)" : "rgba(18,55,42,0.88)",
-                          color: "#fff",
-                          fontWeight: 900,
-                        }}
-                      />
-                    </Box>
+                    <ButtonBase
+                      onClick={() => handleCoverClick(issue)}
+                      disabled={Boolean(unlockingId) || (user ? locked : false)}
+                      sx={{
+                        width: "100%",
+                        display: "block",
+                        textAlign: "left",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <Box sx={{ position: "relative" }}>
+                        <Box
+                          component="img"
+                          src={coverSrc}
+                          alt={issue.title}
+                          loading="lazy"
+                          decoding="async"
+                          sx={{
+                            width: "100%",
+                            aspectRatio: "4 / 5",
+                            objectFit: "cover",
+                            display: "block",
+                          }}
+                        />
+                        <Chip
+                          icon={!user ? <LockIcon /> : locked ? <LockIcon /> : <VerifiedIcon />}
+                          label={coverLabel}
+                          sx={{
+                            position: "absolute",
+                            top: 14,
+                            left: 14,
+                            bgcolor: !user
+                              ? "rgba(12,18,33,0.86)"
+                              : locked
+                                ? "rgba(12,18,33,0.82)"
+                                : "rgba(18,55,42,0.88)",
+                            color: "#fff",
+                            fontWeight: 900,
+                            maxWidth: "calc(100% - 28px)",
+                          }}
+                        />
+                        {isLatest && (
+                          <Chip
+                            label="Latest"
+                            sx={{
+                              position: "absolute",
+                              top: 14,
+                              right: 14,
+                              bgcolor: "rgba(201,162,74,0.92)",
+                              color: "#120d02",
+                              fontWeight: 900,
+                            }}
+                          />
+                        )}
+                      </Box>
+                    </ButtonBase>
 
-                    <Stack spacing={1.4} sx={{ p: 2.25 }}>
+                    <Stack spacing={1} sx={{ p: 2.25 }}>
                       <Typography sx={{ color: "#fff", fontWeight: 900, fontSize: 20, lineHeight: 1.2 }}>
                         {issue.title}
                       </Typography>
-                      <Typography sx={{ color: muted, lineHeight: 1.75 }}>
-                        {issue.desc || "Magazine issue preview with a polished cover and secure download access."}
+                      <Typography sx={{ color: muted, fontSize: 13.5, lineHeight: 1.7 }}>
+                        {user
+                          ? canDownload
+                            ? "Approved readers can tap the cover to download."
+                            : "Complete payment approval to unlock the issue."
+                          : "Register or log in before downloading the full document."}
                       </Typography>
-                      <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
-                        <Chip
-                          icon={<PaymentIcon />}
-                          label={canDownload ? "Approved" : "Pay first"}
-                          sx={{ bgcolor: "rgba(255,255,255,0.08)", color: "#fff", fontWeight: 800 }}
-                        />
-                        <Chip
-                          label={issue.downloadUrl ? "PDF ready" : "Preview only"}
-                          sx={{ bgcolor: "rgba(255,255,255,0.08)", color: "#fff", fontWeight: 800 }}
-                        />
-                      </Stack>
-                      <Button
-                        onClick={() => void openDownload(issue)}
-                        disabled={locked || Boolean(unlockingId)}
-                        startIcon={locked ? <LockIcon /> : <DownloadIcon />}
-                        sx={{
-                          bgcolor: locked ? "rgba(255,255,255,0.08)" : gold,
-                          color: locked ? "#fff" : "#120d02",
-                          textTransform: "none",
-                          fontWeight: 900,
-                          "&:hover": { bgcolor: locked ? "rgba(255,255,255,0.12)" : "#e2bb5a" },
-                        }}
-                      >
-                        {locked ? "Locked until approved" : "Download issue"}
-                      </Button>
                     </Stack>
                   </Paper>
                 );
@@ -581,12 +503,10 @@ const MagazineScreen: React.FC = () => {
             >
               <Stack spacing={1.5}>
                 <Typography sx={{ color: "#fff", fontWeight: 900, fontSize: 20 }}>
-                  The archive is currently being curated
+                  No magazines are available yet
                 </Typography>
                 <Typography sx={{ color: muted, lineHeight: 1.9, maxWidth: 840 }}>
-                  Once a magazine issue is published, viewers will see the cover only, then submit payment proof to
-                  unlock the downloadable PDF after approval. That keeps the experience polished, intentional, and
-                  premium from the very first visit.
+                  New covers will appear here as soon as the next issue is published and approved for display.
                 </Typography>
               </Stack>
             </Paper>
@@ -595,60 +515,52 @@ const MagazineScreen: React.FC = () => {
 
         <Box
           sx={{
-            display: "grid",
-            gridTemplateColumns: { xs: "1fr", md: "repeat(3, minmax(0, 1fr))" },
-            gap: 2.25,
+            display: "flex",
+            flexDirection: "row",
+            flexWrap: "wrap",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 1.5,
             mb: 4,
-          }}
-        >
-          {[
-            {
-              title: "A premium archive",
-              text: "Cover-first layouts, clean spacing, and strong hierarchy keep the magazine catalog professional.",
-            },
-            {
-              title: "Payment approval",
-              text: "Readers submit proof of payment and admins approve access before downloads unlock.",
-            },
-            {
-              title: "Secure delivery",
-              text: "Approved readers access the download through the backend, not just a visible public file link.",
-            },
-          ].map((item) => (
-            <Paper
-              key={item.title}
-              elevation={0}
-              sx={{
-                p: 2.5,
-                bgcolor: "#0f172a",
-                borderRadius: 3,
-                border: "1px solid rgba(255,255,255,0.08)",
-              }}
-            >
-              <Typography sx={{ color: "#fff", fontWeight: 900, mb: 1 }}>{item.title}</Typography>
-              <Typography sx={{ color: muted, lineHeight: 1.8 }}>{item.text}</Typography>
-            </Paper>
-          ))}
-        </Box>
-
-        <Paper
-          elevation={0}
-          sx={{
-            p: { xs: 2.5, md: 3 },
-            bgcolor: panelBg,
-            borderRadius: 3,
+            p: 2,
+            borderRadius: 2.5,
+            bgcolor: "#0b1220",
             border: "1px solid rgba(255,255,255,0.08)",
           }}
         >
-          <Typography sx={{ color: "#fff", fontWeight: 900, fontSize: 22, mb: 1.25 }}>
-            Why this matters
+          <Button
+            onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+            disabled={currentPage === 1 || loading}
+            sx={{
+              bgcolor: "rgba(255,255,255,0.08)",
+              color: "#fff",
+              textTransform: "none",
+              fontWeight: 800,
+              px: 2.5,
+            }}
+          >
+            Previous
+          </Button>
+
+          <Typography sx={{ color: muted, fontWeight: 700 }}>
+            Page {currentPage} of {pageCount} · {pageMeta.total} magazines
           </Typography>
-          <Typography sx={{ color: muted, lineHeight: 1.9, maxWidth: 980 }}>
-            The magazine library should feel trustworthy before readers spend money. A structured catalog, visible bank
-            details, and an admin approval gate make the experience feel official and credible, similar to premium
-            digital magazine platforms.
-          </Typography>
-        </Paper>
+
+          <Button
+            onClick={() => setCurrentPage((page) => page + 1)}
+            disabled={!pageMeta.hasMore || loading}
+            sx={{
+              bgcolor: gold,
+              color: "#120d02",
+              textTransform: "none",
+              fontWeight: 900,
+              px: 2.5,
+              "&:hover": { bgcolor: "#e2bb5a" },
+            }}
+          >
+            Next
+          </Button>
+        </Box>
       </Container>
 
       <Snackbar

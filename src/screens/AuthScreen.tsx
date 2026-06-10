@@ -50,6 +50,18 @@ const getFriendlyAuthMessage = (error: unknown, fallback: string) => {
   return message;
 };
 
+const getPostLoginPath = (userRole: string, permissions: Array<string>) => {
+  if (userRole === "admin" || permissions.length > 0) {
+    return "/admin";
+  }
+
+  if (userRole === "blogger") {
+    return "/blogger";
+  }
+
+  return "/";
+};
+
 const AuthScreen: React.FC<AuthScreenProps> = ({ mode }) => {
   const navigate = useNavigate();
   const { user, login, register, isLoading } = useAuth();
@@ -61,7 +73,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ mode }) => {
   const title = useMemo(() => (isRegister ? "Create account" : "Login"), [isRegister]);
 
   if (!isLoading && user) {
-    return <Navigate to={user.role === "admin" || (user.permissions || []).length > 0 ? "/admin" : "/dashboard"} replace />;
+    return <Navigate to={getPostLoginPath(user.role, user.permissions || [])} replace />;
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -97,7 +109,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ mode }) => {
           state,
         });
 
-        navigate((registeredUser.permissions || []).length > 0 || registeredUser.role === "admin" ? "/admin" : "/dashboard", { replace: true });
+        navigate(getPostLoginPath(registeredUser.role, registeredUser.permissions || []), { replace: true });
         return;
       }
 
@@ -114,7 +126,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ mode }) => {
         password
       );
 
-      navigate(loggedInUser.role === "admin" || (loggedInUser.permissions || []).length > 0 ? "/admin" : "/dashboard", { replace: true });
+      navigate(getPostLoginPath(loggedInUser.role, loggedInUser.permissions || []), { replace: true });
     } catch (error) {
       setFeedback({
         severity: "error",

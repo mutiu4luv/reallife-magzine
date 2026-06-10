@@ -89,6 +89,13 @@ export type PhotoGalleryItem = {
   createdAt?: string;
 };
 
+export type MagazinePageMeta = {
+  page: number;
+  limit: number;
+  total: number;
+  hasMore: boolean;
+};
+
 export type StoryComment = {
   _id: string;
   contentType: "post" | "news" | "event";
@@ -238,10 +245,22 @@ export const loadPosts = async () =>
     normalizePostItem
   );
 
-export const loadMagazines = async () =>
-  normalizeCollection<PostItem>(
-    await requestJson<unknown>([MAGAZINES_ENDPOINT], undefined, "Unable to load magazines.")
-  ).map(normalizePostItem);
+export const loadMagazines = async (page = 1, limit = 12) => {
+  const query = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+  });
+  const response = await requestJson<{ data?: unknown; meta?: MagazinePageMeta }>(
+    [`${MAGAZINES_ENDPOINT}?${query.toString()}`],
+    undefined,
+    "Unable to load magazines."
+  );
+
+  const items = normalizeCollection<PostItem>(response?.data).map(normalizePostItem);
+  const meta = response?.meta || { page, limit, total: items.length, hasMore: false };
+
+  return { items, meta };
+};
 
 export const loadPastEditions = async () =>
   normalizeCollection<PastEditionItem>(

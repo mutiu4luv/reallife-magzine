@@ -43,6 +43,18 @@ const Navbar: React.FC = () => {
     return location.pathname === path || location.pathname.startsWith(`${path}/`);
   };
 
+  const getUserDestination = () => {
+    if (!user) {
+      return "/login";
+    }
+
+    if (user.role === "blogger") {
+      return "/blogger";
+    }
+
+    return "/dashboard";
+  };
+
   return (
     <>
       <AppBar position="static" sx={{ bgcolor: "#000", boxShadow: "none" }}>
@@ -102,7 +114,7 @@ const Navbar: React.FC = () => {
               );
             })}
             <Button
-              onClick={() => navigate(user ? "/dashboard" : "/login")}
+              onClick={() => navigate(getUserDestination())}
               sx={{
                 bgcolor: "#FFD700",
                 color: "#000",
@@ -180,7 +192,7 @@ const Navbar: React.FC = () => {
               <ListItemButton
                 onClick={() => {
                   setOpen(false);
-                  navigate(user ? "/dashboard" : "/login");
+                  navigate(getUserDestination());
                 }}
                 sx={{
                   borderLeft: "4px solid transparent",

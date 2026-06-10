@@ -18,6 +18,12 @@ import {
   MenuItem,
   Pagination,
   Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   Snackbar,
   Stack,
   TextField,
@@ -648,6 +654,7 @@ const AdminScreen: React.FC = () => {
   const [permissionRequests, setPermissionRequests] = useState<AuthUser[]>([]);
   const [magazineRequests, setMagazineRequests] = useState<AuthUser[]>([]);
   const [users, setUsers] = useState<AuthUser[]>([]);
+  const [userSearch, setUserSearch] = useState("");
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [isActivityLoading, setIsActivityLoading] = useState(false);
   const [resolvingAdminRequestId, setResolvingAdminRequestId] = useState<string | null>(null);
@@ -748,6 +755,23 @@ const AdminScreen: React.FC = () => {
 
     return items;
   }, [activityDate, activitySearch, activityTime, auditLogs]);
+  const filteredUsers = useMemo(() => {
+    const query = userSearch.trim().toLowerCase();
+    if (!query) return users;
+
+    return users.filter((account) =>
+      getSearchText([
+        account.name,
+        account.email,
+        account.phonenumber,
+        account.role,
+        account.adminRequestStatus,
+        account.permissionRequestStatus,
+        account.magazineAccessStatus,
+        account.requestedPermissions?.join(" "),
+      ]).includes(query)
+    );
+  }, [userSearch, users]);
   const postPageCount = useMemo(() => getPageCount(filteredPosts.length), [filteredPosts.length]);
   const newsPageCount = useMemo(() => getPageCount(filteredNews.length), [filteredNews.length]);
   const eventPageCount = useMemo(() => getPageCount(filteredEvents.length), [filteredEvents.length]);
@@ -5304,42 +5328,133 @@ const AdminScreen: React.FC = () => {
 
             {activeView === "users" && (
             <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid #e6e8ec", borderRadius: 2 }}>
-              <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2, mb: 2 }}>
-                <Typography variant="h6" sx={{ fontWeight: 900 }}>Users</Typography>
-                <Chip size="small" label={`${users.length} total`} sx={{ bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 900 }} />
+              <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2, mb: 2, flexDirection: { xs: "column", sm: "row" }, alignItems: { xs: "stretch", sm: "center" } }}>
+                <Box>
+                  <Typography variant="h6" sx={{ fontWeight: 900 }}>Users</Typography>
+                  <Typography sx={{ color: "#667085", mt: 0.5 }}>
+                    Search users, inspect access status, and manage roles from one table.
+                  </Typography>
+                </Box>
+                <Chip size="small" label={`${filteredUsers.length} shown · ${users.length} total`} sx={{ bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 900, alignSelf: "flex-start" }} />
               </Box>
-              <Stack spacing={1.5}>
-                {users.map((account) => (
-                  <Box key={account._id} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) auto" }, gap: 1.5, p: 2, border: "1px solid #edf0f2", borderRadius: 1.5 }}>
-                    <Box>
-                      <Typography sx={{ fontWeight: 900 }}>{account.name}</Typography>
-                      <Typography sx={{ color: "#667085", fontSize: 13 }}>{account.email} - {account.phonenumber}</Typography>
-                      <Typography sx={{ color: "#667085", fontSize: 13 }}>Role: {account.role}</Typography>
-                    </Box>
-                    <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-                      {account.role === "user" && (
-                        <Button
-                          onClick={() => void handleUpdateUserRole(account, "blogger")}
-                          disabled={resolvingPermissionRequestId === account._id}
-                          sx={{ bgcolor: "#12372A", color: "#fff", textTransform: "none", fontWeight: 900 }}
-                        >
-                          Upgrade to blogger
-                        </Button>
-                      )}
-                      {account.role === "blogger" && (
-                        <Button
-                          onClick={() => void handleUpdateUserRole(account, "user")}
-                          disabled={resolvingPermissionRequestId === account._id}
-                          sx={{ color: "#6f5517", border: "1px solid #caa64a", textTransform: "none", fontWeight: 900 }}
-                        >
-                          Downgrade to user
-                        </Button>
-                      )}
-                      <Button onClick={() => void handleDeleteUser(account)} disabled={account._id === user?._id || deletingId === account._id} startIcon={<Delete />} sx={{ color: "#b42318", border: "1px solid #fda29b", textTransform: "none", fontWeight: 900 }}>Delete user</Button>
-                    </Stack>
-                  </Box>
-                ))}
-              </Stack>
+
+              <TextField
+                value={userSearch}
+                onChange={(event) => setUserSearch(event.target.value)}
+                placeholder="Search by name, email, phone, or role"
+                fullWidth
+                size="small"
+                sx={{ mb: 2 }}
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <Search fontSize="small" />
+                      </InputAdornment>
+                    ),
+                  },
+                }}
+              />
+
+              <TableContainer sx={{ border: "1px solid #edf0f2", borderRadius: 2 }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: "#f9fafb" }}>
+                      <TableCell sx={{ fontWeight: 900 }}>User</TableCell>
+                      <TableCell sx={{ fontWeight: 900 }}>Role</TableCell>
+                      <TableCell sx={{ fontWeight: 900 }}>Requests</TableCell>
+                      <TableCell sx={{ fontWeight: 900 }}>Magazine</TableCell>
+                      <TableCell sx={{ fontWeight: 900 }}>Permissions</TableCell>
+                      <TableCell sx={{ fontWeight: 900, textAlign: "right" }}>Actions</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {filteredUsers.map((account) => (
+                      <TableRow key={account._id} hover>
+                        <TableCell>
+                          <Stack spacing={0.5}>
+                            <Typography sx={{ fontWeight: 900 }}>{account.name}</Typography>
+                            <Typography sx={{ color: "#667085", fontSize: 13 }}>{account.email}</Typography>
+                            <Typography sx={{ color: "#667085", fontSize: 13 }}>{account.phonenumber}</Typography>
+                          </Stack>
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            size="small"
+                            label={account.role}
+                            sx={{
+                              bgcolor: account.role === "admin" ? "#dbeafe" : account.role === "blogger" ? "#eaf7f0" : "#f2f4f7",
+                              color: account.role === "admin" ? "#175cd3" : account.role === "blogger" ? "#0f7a43" : "#344054",
+                              fontWeight: 900,
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Stack spacing={0.5}>
+                            <Chip size="small" label={`Admin: ${account.adminRequestStatus}`} sx={{ bgcolor: "#f2f4f7", color: "#344054", fontWeight: 700, width: "fit-content" }} />
+                            <Chip size="small" label={`Blogger: ${account.permissionRequestStatus}`} sx={{ bgcolor: "#f2f4f7", color: "#344054", fontWeight: 700, width: "fit-content" }} />
+                          </Stack>
+                        </TableCell>
+                        <TableCell>
+                          <Stack spacing={0.5}>
+                            <Chip size="small" label={`Magazine: ${account.magazineAccessStatus}`} sx={{ bgcolor: "#f2f4f7", color: "#344054", fontWeight: 700, width: "fit-content" }} />
+                            <Typography sx={{ color: "#667085", fontSize: 12 }}>
+                              Ref: {account.magazineAccessReference || "—"}
+                            </Typography>
+                          </Stack>
+                        </TableCell>
+                        <TableCell>
+                          <Typography sx={{ color: "#667085", fontSize: 13 }}>
+                            {account.permissions?.length || 0} permission{(account.permissions?.length || 0) === 1 ? "" : "s"}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="right">
+                          <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", justifyContent: "flex-end" }}>
+                            {account.role === "user" && (
+                              <Button
+                                onClick={() => void handleUpdateUserRole(account, "blogger")}
+                                disabled={resolvingPermissionRequestId === account._id}
+                                size="small"
+                                sx={{ bgcolor: "#12372A", color: "#fff", textTransform: "none", fontWeight: 900 }}
+                              >
+                                Upgrade
+                              </Button>
+                            )}
+                            {account.role === "blogger" && (
+                              <Button
+                                onClick={() => void handleUpdateUserRole(account, "user")}
+                                disabled={resolvingPermissionRequestId === account._id}
+                                size="small"
+                                sx={{ color: "#6f5517", border: "1px solid #caa64a", textTransform: "none", fontWeight: 900 }}
+                              >
+                                Downgrade
+                              </Button>
+                            )}
+                            <Button
+                              onClick={() => void handleDeleteUser(account)}
+                              disabled={account._id === user?._id || deletingId === account._id}
+                              startIcon={<Delete />}
+                              size="small"
+                              sx={{ color: "#b42318", border: "1px solid #fda29b", textTransform: "none", fontWeight: 900 }}
+                            >
+                              Delete
+                            </Button>
+                          </Stack>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {!filteredUsers.length && (
+                      <TableRow>
+                        <TableCell colSpan={6}>
+                          <Typography sx={{ color: "#667085", py: 2 }}>
+                            {users.length ? "No users match your search." : "No users returned from the API yet."}
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             </Paper>
             )}
 

@@ -75,6 +75,7 @@ function App() {
         <Route path="/login" element={<AuthScreen mode="login" />} />
         <Route path="/register" element={<AuthScreen mode="register" />} />
         <Route path="/dashboard" element={<UserDashboardScreen />} />
+        <Route path="/blogger" element={<UserDashboardScreen />} />
         <Route path="/admin" element={<ProtectedAdminRoute />} />
 
       {/* </Route> */}

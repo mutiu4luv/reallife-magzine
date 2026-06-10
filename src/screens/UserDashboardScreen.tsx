@@ -79,6 +79,8 @@ const UserDashboardScreen: React.FC = () => {
     navigate("/login", { replace: true });
   };
 
+  const dashboardTitle = user.role === "blogger" ? "Blogger dashboard" : "User dashboard";
+
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: "#f4f6f8", py: { xs: 4, md: 7 } }}>
       <Container maxWidth="lg">
@@ -87,7 +89,7 @@ const UserDashboardScreen: React.FC = () => {
             <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ justifyContent: "space-between" }}>
               <Box>
                 <Typography component="h1" sx={{ fontSize: { xs: 30, md: 42 }, fontWeight: 950, color: "#171a20" }}>
-                  User dashboard
+                  {dashboardTitle}
                 </Typography>
                 <Typography sx={{ color: "#667085", fontWeight: 700 }}>
                   {user.name} - {user.email} - {user.role}
