@@ -234,6 +234,19 @@ const KingSunnyAdeCompendiumScreen: React.FC = () => {
         </Box>
 
         <Container maxWidth="lg" sx={{ py: { xs: 4, md: 6 } }}>
+        <Box
+                    component="img"
+                    src={kingImage}
+                    alt="King Sunny Ade portrait"
+                    sx={{
+                      width: { xs: "100%", sm: 180 },
+                      height: { xs: 240, sm: 220 },
+                      objectFit: "cover",
+                      borderRadius: 2,
+                      border: "1px solid rgba(255,255,255,0.08)",
+                    }}
+                  />
+
           <Paper
             elevation={0}
             sx={{
@@ -290,38 +303,75 @@ const KingSunnyAdeCompendiumScreen: React.FC = () => {
                   gap: 1.5,
                 }}
               >
-                {[authorizeImage, authorized2Image].map((image, index) => (
-                  <Paper
-                    key={image}
-                    elevation={0}
+                <Paper
+                  elevation={0}
+                  sx={{
+                    overflow: "hidden",
+                    borderRadius: { xs: 2, md: "50%" },
+                    bgcolor: "#ffffff",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    mx: "auto",
+                    width: { xs: "100%", md: 260 },
+                    maxWidth: { xs: "100%", md: 260 },
+                    aspectRatio: { xs: "4 / 5", md: "1 / 1" },
+                    p: { xs: 0, md: 1.25 },
+                  }}
+                >
+                  <Box
+                    component="img"
+                    src={authorizeImage}
+                    alt="Authorization letter"
+                    loading="lazy"
+                    decoding="async"
                     sx={{
-                      overflow: "hidden",
-                      borderRadius: { xs: 2, md: "50%" },
-                      bgcolor: "#ffffff",
-                      border: "1px solid rgba(255,255,255,0.08)",
-                      mx: "auto",
-                      width: { xs: "100%", md: 260 },
-                      maxWidth: { xs: "100%", md: 260 },
-                      aspectRatio: { xs: "4 / 5", md: "1 / 1" },
-                      p: { xs: 0, md: 1.25 },
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "contain",
+                      display: "block",
+                      borderRadius: { xs: 0, md: "50%" },
                     }}
-                  >
-                    <Box
-                      component="img"
-                      src={image}
-                      alt={index === 0 ? "Authorization letter" : "Authorization support letter"}
-                      loading="lazy"
-                      decoding="async"
-                      sx={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "contain",
-                        display: "block",
-                        borderRadius: { xs: 0, md: "50%" },
-                      }}
-                    />
-                  </Paper>
-                ))}
+                  />
+                </Paper>
+
+                <Box sx={{ display: { xs: "block", sm: "none" } }}>
+                  <Typography sx={{ color: "#f5e2b8", fontWeight: 800, mb: 0.75 }}>
+                    Why this matters
+                  </Typography>
+                  <Typography sx={{ color: "#d7deea", lineHeight: 1.8 }}>
+                    This section helps subscribers and sponsors see the project as official, structured, and credible.
+                    It strengthens confidence before they submit messages, adverts, or sponsorship support.
+                  </Typography>
+                </Box>
+
+                <Paper
+                  elevation={0}
+                  sx={{
+                    overflow: "hidden",
+                    borderRadius: { xs: 2, md: "50%" },
+                    bgcolor: "#ffffff",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    mx: "auto",
+                    width: { xs: "100%", md: 260 },
+                    maxWidth: { xs: "100%", md: 260 },
+                    aspectRatio: { xs: "4 / 5", md: "1 / 1" },
+                    p: { xs: 0, md: 1.25 },
+                  }}
+                >
+                  <Box
+                    component="img"
+                    src={authorized2Image}
+                    alt="Authorization support letter"
+                    loading="lazy"
+                    decoding="async"
+                    sx={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "contain",
+                      display: "block",
+                      borderRadius: { xs: 0, md: "50%" },
+                    }}
+                  />
+                </Paper>
               </Box>
             </Box>
           </Paper>
@@ -353,18 +403,7 @@ const KingSunnyAdeCompendiumScreen: React.FC = () => {
                     alignItems: "center",
                   }}
                 >
-                  <Box
-                    component="img"
-                    src={kingImage}
-                    alt="King Sunny Ade portrait"
-                    sx={{
-                      width: { xs: "100%", sm: 180 },
-                      height: { xs: 240, sm: 220 },
-                      objectFit: "cover",
-                      borderRadius: 2,
-                      border: "1px solid rgba(255,255,255,0.08)",
-                    }}
-                  />
+                  
                   <Box>
                     <Typography sx={{ color: "#f5e2b8", fontWeight: 900, mb: 0.75 }}>
                       Your Goodwill &amp; Congratulatory Messages
