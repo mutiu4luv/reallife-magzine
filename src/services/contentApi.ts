@@ -3,6 +3,7 @@ import { getAuthHeaders } from "./authApi";
 
 export const NEWS_ENDPOINT = `${API_BASE_URL}/api/news`;
 export const POSTS_ENDPOINT = `${API_BASE_URL}/api/posts`;
+export const MAGAZINES_ENDPOINT = `${API_BASE_URL}/api/magazines`;
 export const PAST_EDITIONS_ENDPOINT = `${API_BASE_URL}/api/past-editions`;
 export const TESTIMONIES_ENDPOINT = `${API_BASE_URL}/api/testimonies`;
 export const INTERVIEWS_ENDPOINT = `${API_BASE_URL}/api/interviews`;
@@ -32,7 +33,9 @@ export type PostItem = {
   desc?: string;
   description?: string;
   image: string;
+  coverImage?: string;
   images?: string[];
+  downloadUrl?: string;
   createdAt?: string;
 };
 
@@ -140,6 +143,7 @@ const normalizeEventItem = (item: EventItem): EventItem => ({
 const normalizePostItem = (item: PostItem): PostItem => ({
   ...item,
   desc: item.desc || item.description || "",
+  coverImage: sanitizeImageUrl(item.coverImage) || sanitizeImageUrl(item.image) || sanitizeImageUrl(item.images?.[0]) || "",
   image: sanitizeImageUrl(item.image) || sanitizeImageUrl(item.images?.[0]) || "",
   images: sanitizeImageList(Array.isArray(item.images) ? item.images : item.image ? [item.image] : []),
 });
@@ -233,6 +237,11 @@ export const loadPosts = async () =>
   normalizeCollection<PostItem>(await requestJson<unknown>([POSTS_ENDPOINT], undefined, "Unable to load posts.")).map(
     normalizePostItem
   );
+
+export const loadMagazines = async () =>
+  normalizeCollection<PostItem>(
+    await requestJson<unknown>([MAGAZINES_ENDPOINT], undefined, "Unable to load magazines.")
+  ).map(normalizePostItem);
 
 export const loadPastEditions = async () =>
   normalizeCollection<PastEditionItem>(

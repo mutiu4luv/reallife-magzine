@@ -14,6 +14,7 @@ import {
 import MenuIcon from "@mui/icons-material/Menu";
 import { useNavigate, useLocation } from "react-router-dom";
 import heroImage from "../assets/hero.jpeg";
+import { useAuth } from "../context/useAuth";
 
 const navLinks = [
   { label: "Home", path: "/" },
@@ -22,6 +23,7 @@ const navLinks = [
   { label: "Contact", path: "/contact" },
   { label: "Profile", path: "/profile" },
   { label: "Blog", path: "/blog" },
+  { label: "Magazine", path: "/magazine" },
   { label: "News", path: "/news" },
   { label: "Events", path: "/events" },
   { label: "KSA@80", path: "/king--Sunny-Ade-@80" },
@@ -31,6 +33,7 @@ const Navbar: React.FC = () => {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
 
   const isActiveLink = (path: string) => {
     if (path === "/") {
@@ -98,6 +101,20 @@ const Navbar: React.FC = () => {
                 </Button>
               );
             })}
+            <Button
+              onClick={() => navigate(user ? "/dashboard" : "/login")}
+              sx={{
+                bgcolor: "#FFD700",
+                color: "#000",
+                fontWeight: 900,
+                textTransform: "none",
+                px: 2.2,
+                ml: 1,
+                "&:hover": { bgcolor: "#f6c800" },
+              }}
+            >
+              {user ? "Dashboard" : "Login"}
+            </Button>
           </Box>
 
           <IconButton
@@ -159,6 +176,31 @@ const Navbar: React.FC = () => {
                 </ListItem>
               );
             })}
+            <ListItem disablePadding sx={{ mt: 1 }}>
+              <ListItemButton
+                onClick={() => {
+                  setOpen(false);
+                  navigate(user ? "/dashboard" : "/login");
+                }}
+                sx={{
+                  borderLeft: "4px solid transparent",
+                  bgcolor: "rgba(255, 215, 0, 0.1)",
+                  "&:hover": { bgcolor: "rgba(255, 215, 0, 0.18)" },
+                }}
+              >
+                <ListItemText
+                  primary={user ? "Dashboard" : "Login"}
+                  slotProps={{
+                    primary: {
+                      sx: {
+                        color: "#000",
+                        fontWeight: 800,
+                      },
+                    },
+                  }}
+                />
+              </ListItemButton>
+            </ListItem>
           </List>
         </Box>
       </Drawer>

@@ -62,10 +62,12 @@ import {
   loadAuditLogs,
   loadAdminRequests,
   loadPermissionRequests,
+  loadMagazineRequests,
   loadUsers,
   deleteUser,
   resolveAdminRequest,
   resolvePermissionRequest,
+  resolveMagazineRequest,
   updateUserRole,
 } from "../services/authApi";
 import type { AuditLog, AuthUser, Permission } from "../services/authApi";
@@ -90,6 +92,8 @@ const MAX_IMAGE_SIZE_BYTES = 1.2 * 1024 * 1024;
 const MAX_EVENT_TOTAL_UPLOAD_BYTES = 4 * 1024 * 1024;
 const MAX_IMAGE_SIZE_LABEL = "1.2MB";
 const MAX_EVENT_TOTAL_UPLOAD_LABEL = "4MB";
+const MAX_PDF_SIZE_BYTES = 25 * 1024 * 1024;
+const MAX_PDF_SIZE_LABEL = "25MB";
 const ADMIN_PAGE_SIZE = 6;
 const MAX_INTERVIEW_QA = 6;
 
@@ -102,6 +106,7 @@ type Post = {
   desc: string;
   image: string;
   images?: string[];
+  downloadUrl?: string;
   isDeleted?: boolean;
   deletedAt?: string;
   deletedBy?: { name?: string; email?: string; role?: string };
@@ -201,6 +206,7 @@ type ShareableAdminItem = Extract<Exclude<PendingEdit, null>, { kind: "post" | "
 type ActiveView =
   | "dashboard"
   | "posts"
+  | "magazines"
   | "news"
   | "events"
   | "pastEditions"
@@ -210,6 +216,7 @@ type ActiveView =
   | "compendium"
   | "adminRequests"
   | "permissionRequests"
+  | "magazineRequests"
   | "users"
   | "activity"
   | "messages";
@@ -221,6 +228,7 @@ type RequestJsonOptions = {
 const navItems = [
   { id: "dashboard", label: "Dashboard", icon: <Dashboard fontSize="small" /> },
   { id: "posts", label: "Blog", icon: <LibraryBooks fontSize="small" /> },
+  { id: "magazines", label: "Magazines", icon: <AutoStories fontSize="small" /> },
   { id: "news", label: "News", icon: <Article fontSize="small" /> },
   { id: "events", label: "Events", icon: <EventAvailable fontSize="small" /> },
   { id: "pastEditions", label: "Past Editions", icon: <PhotoLibrary fontSize="small" /> },
@@ -230,6 +238,7 @@ const navItems = [
   { id: "compendium", label: "Commemorative", icon: <AutoStories fontSize="small" /> },
   { id: "adminRequests", label: "Admin Requests", icon: <AdminPanelSettings fontSize="small" /> },
   { id: "permissionRequests", label: "Blogger Requests", icon: <AdminPanelSettings fontSize="small" /> },
+  { id: "magazineRequests", label: "Magazine Access", icon: <AutoStories fontSize="small" /> },
   { id: "users", label: "Users", icon: <AdminPanelSettings fontSize="small" /> },
   { id: "activity", label: "Activity", icon: <Dashboard fontSize="small" /> },
   { id: "messages", label: "Messages", icon: <Mail fontSize="small" /> },
@@ -242,7 +251,11 @@ const viewCopy: Record<ActiveView, { title: string; subtitle: string }> = {
   },
   posts: {
     title: "Blog",
-    subtitle: "Create and review blog articles, magazines, and books.",
+    subtitle: "Create and review blog articles and books.",
+  },
+  magazines: {
+    title: "Magazines",
+    subtitle: "Publish cover-first magazine issues with a locked PDF download.",
   },
   news: {
     title: "News",
@@ -279,6 +292,10 @@ const viewCopy: Record<ActiveView, { title: string; subtitle: string }> = {
   permissionRequests: {
     title: "Blogger Requests",
     subtitle: "Approve users who requested full blogger access.",
+  },
+  magazineRequests: {
+    title: "Magazine Payments",
+    subtitle: "Approve readers who submitted payment proof for premium magazine downloads.",
   },
   users: {
     title: "Users",
@@ -329,8 +346,13 @@ const toAdminErrorMessage = (message: string) =>
 const isUsableImageFile = (value: FormDataEntryValue | null): value is File =>
   value instanceof File && value.size > 0 && value.type.startsWith("image/");
 
+const isUsablePdfFile = (value: FormDataEntryValue | null): value is File =>
+  value instanceof File && value.size > 0 && (value.type === "application/pdf" || value.name.toLowerCase().endsWith(".pdf"));
+
 const getLargeImageNames = (files: File[]) =>
   files.filter((file) => file.size > MAX_IMAGE_SIZE_BYTES).map((file) => file.name);
+
+const getLargePdfNames = (files: File[]) => files.filter((file) => file.size > MAX_PDF_SIZE_BYTES).map((file) => file.name);
 
 const getTotalFileSize = (files: File[]) =>
   files.reduce((total, file) => total + file.size, 0);
@@ -599,6 +621,7 @@ const AdminScreen: React.FC = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const postFormRef = useRef<HTMLFormElement>(null);
+  const magazineFormRef = useRef<HTMLFormElement>(null);
   const newsFormRef = useRef<HTMLFormElement>(null);
   const eventFormRef = useRef<HTMLFormElement>(null);
   const pastEditionFormRef = useRef<HTMLFormElement>(null);
@@ -623,11 +646,13 @@ const AdminScreen: React.FC = () => {
   const [compendiumSubmissions, setCompendiumSubmissions] = useState<CommemorativeSubmission[]>([]);
   const [adminRequests, setAdminRequests] = useState<AuthUser[]>([]);
   const [permissionRequests, setPermissionRequests] = useState<AuthUser[]>([]);
+  const [magazineRequests, setMagazineRequests] = useState<AuthUser[]>([]);
   const [users, setUsers] = useState<AuthUser[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [isActivityLoading, setIsActivityLoading] = useState(false);
   const [resolvingAdminRequestId, setResolvingAdminRequestId] = useState<string | null>(null);
   const [resolvingPermissionRequestId, setResolvingPermissionRequestId] = useState<string | null>(null);
+  const [resolvingMagazineRequestId, setResolvingMagazineRequestId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingPost, setIsSavingPost] = useState(false);
   const [isSavingNews, setIsSavingNews] = useState(false);
@@ -639,6 +664,7 @@ const AdminScreen: React.FC = () => {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [selectedBlogImageNames, setSelectedBlogImageNames] = useState("");
+  const [selectedBlogPdfName, setSelectedBlogPdfName] = useState("");
   const [selectedPastEditionImageNames, setSelectedPastEditionImageNames] = useState("");
   const [selectedTestimonyImageNames, setSelectedTestimonyImageNames] = useState("");
   const [selectedInterviewImageNames, setSelectedInterviewImageNames] = useState("");
@@ -772,11 +798,14 @@ const AdminScreen: React.FC = () => {
   const visibleNavItems = useMemo(
     () =>
       navItems.filter((item) => {
-        if (["adminRequests", "permissionRequests", "users", "activity", "messages", "compendium"].includes(item.id)) {
+        if (
+          ["adminRequests", "permissionRequests", "magazineRequests", "users", "activity", "messages", "compendium"].includes(item.id)
+        ) {
           return isOwnerAdmin;
         }
 
         if (item.id === "posts") return can("posts:create") || can("posts:update") || can("posts:delete");
+        if (item.id === "magazines") return can("posts:create") || can("posts:update") || can("posts:delete");
         if (item.id === "news") return can("news:create") || can("news:update") || can("news:delete");
         if (item.id === "events") return can("events:create") || can("events:update") || can("events:delete");
         if (item.id === "pastEditions") return can("pastEditions:create") || can("pastEditions:delete");
@@ -850,6 +879,7 @@ const AdminScreen: React.FC = () => {
       deletedPostsResult,
       adminRequestResult,
       permissionRequestResult,
+      magazineRequestResult,
       userResult,
       auditLogResult,
     ] = await Promise.all([
@@ -909,6 +939,14 @@ const AdminScreen: React.FC = () => {
             }))
         : Promise.resolve({ items: [] as AuthUser[], error: "" }),
       isOwnerAdmin
+        ? loadMagazineRequests()
+            .then((items) => ({ items, error: "" }))
+            .catch((error) => ({
+              items: [] as AuthUser[],
+              error: error instanceof Error ? error.message : "Unable to load magazine requests.",
+            }))
+        : Promise.resolve({ items: [] as AuthUser[], error: "" }),
+      isOwnerAdmin
         ? loadUsers()
             .then((items) => ({ items, error: "" }))
             .catch((error) => ({
@@ -944,6 +982,7 @@ const AdminScreen: React.FC = () => {
     setDeletedPosts(deletedPostsResult.items);
     setAdminRequests(adminRequestResult.items);
     setPermissionRequests(permissionRequestResult.items);
+    setMagazineRequests(magazineRequestResult.items);
     setUsers(userResult.items);
     setAuditLogs(auditLogResult.items);
     if (isOwnerAdmin) {
@@ -969,6 +1008,7 @@ const AdminScreen: React.FC = () => {
       deletedPostsResult.error && "deleted blogs",
       adminRequestResult.error && "admin requests",
       permissionRequestResult.error && "blogger requests",
+      magazineRequestResult.error && "magazine requests",
       userResult.error && "users",
       auditLogResult.error && "activity",
     ].filter(Boolean);
@@ -1216,6 +1256,7 @@ const AdminScreen: React.FC = () => {
       const title = String(formData.get("title") || "").trim();
       const description = String(formData.get("desc") || "").trim();
       const type = String(formData.get("type") || "Magazine") as PostType;
+      const downloadUrl = String(formData.get("downloadUrl") || "").trim();
       const imageFiles = formData.getAll("images").filter(isUsableImageFile).slice(0, MAX_EVENT_IMAGES);
 
       if (!title || !description) {
@@ -1226,6 +1267,9 @@ const AdminScreen: React.FC = () => {
       updateFormData.set("title", title);
       updateFormData.set("desc", description);
       updateFormData.set("type", type);
+      if (downloadUrl) {
+        updateFormData.set("downloadUrl", downloadUrl);
+      }
 
       imageFiles.forEach((image) => updateFormData.append("images", image));
 
@@ -1405,7 +1449,6 @@ const AdminScreen: React.FC = () => {
     const imageFiles = formData.getAll("images").filter(isUsableImageFile);
     const title = String(formData.get("title") || "").trim();
     const desc = String(formData.get("desc") || "").trim();
-    const type = String(formData.get("type") || "Magazine") as PostType;
 
     if (!title || !desc || imageFiles.length === 0) {
       setFeedback({ severity: "error", message: "Blog title, description, and at least one image are required." });
@@ -1423,17 +1466,13 @@ const AdminScreen: React.FC = () => {
       return;
     }
 
-    const buildBlogFormData = () => {
-      const blogFormData = new FormData();
-      blogFormData.set("title", title);
-      blogFormData.set("desc", desc);
-      blogFormData.set("type", type);
-      imageFiles.slice(0, MAX_EVENT_IMAGES).forEach((image) => {
-        blogFormData.append("images", image);
-      });
-
-      return blogFormData;
-    };
+    const blogFormData = new FormData();
+    blogFormData.set("title", title);
+    blogFormData.set("desc", desc);
+    blogFormData.set("type", "Book");
+    imageFiles.slice(0, MAX_EVENT_IMAGES).forEach((image) => {
+      blogFormData.append("images", image);
+    });
 
     setIsSavingPost(true);
     try {
@@ -1441,7 +1480,7 @@ const AdminScreen: React.FC = () => {
         [POST_ENDPOINT],
         {
           method: "POST",
-          body: buildBlogFormData(),
+          body: blogFormData,
         },
         "Unable to publish blog."
       );
@@ -1454,6 +1493,83 @@ const AdminScreen: React.FC = () => {
       setFeedback({
         severity: "error",
         message: error instanceof Error ? error.message : "Unable to publish blog.",
+      });
+    } finally {
+      setIsSavingPost(false);
+    }
+  };
+
+  const handleMagazineSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+
+    const imageFiles = formData.getAll("images").filter(isUsableImageFile).slice(0, 1);
+    const pdfFiles = formData.getAll("pdfFile").filter(isUsablePdfFile).slice(0, 1);
+    const title = String(formData.get("title") || "").trim();
+    const desc = String(formData.get("desc") || "").trim();
+    const downloadUrl = String(formData.get("downloadUrl") || "").trim();
+
+    if (!title || !desc || imageFiles.length === 0) {
+      setFeedback({ severity: "error", message: "Issue title, description, and a cover page are required." });
+      return;
+    }
+
+    if (pdfFiles.length === 0 && !downloadUrl) {
+      setFeedback({
+        severity: "error",
+        message: "Please attach the issue PDF or provide a secure download URL before publishing.",
+      });
+      return;
+    }
+
+    const largeImageNames = getLargeImageNames(imageFiles);
+    if (largeImageNames.length > 0) {
+      setFeedback({ severity: "error", message: buildLargeImageMessage(largeImageNames) });
+      return;
+    }
+
+    const largePdfNames = getLargePdfNames(pdfFiles);
+    if (largePdfNames.length > 0) {
+      setFeedback({
+        severity: "error",
+        message:
+          largePdfNames.length === 1
+            ? `${largePdfNames[0]} is larger than ${MAX_PDF_SIZE_LABEL}. Please choose a smaller PDF.`
+            : `Selected PDFs are larger than ${MAX_PDF_SIZE_LABEL}. Please choose a smaller file.`,
+      });
+      return;
+    }
+
+    const magazineFormData = new FormData();
+    magazineFormData.set("title", title);
+    magazineFormData.set("desc", desc);
+    magazineFormData.set("type", "Magazine");
+    if (downloadUrl) {
+      magazineFormData.set("downloadUrl", downloadUrl);
+    }
+    imageFiles.forEach((image) => magazineFormData.append("images", image));
+    pdfFiles.forEach((pdfFile) => magazineFormData.append("pdfFile", pdfFile));
+
+    setIsSavingPost(true);
+    try {
+      const createdPost = await requestJson<Post>(
+        [POST_ENDPOINT],
+        {
+          method: "POST",
+          body: magazineFormData,
+        },
+        "Unable to publish issue."
+      );
+
+      setPosts((currentPosts) => [createdPost, ...currentPosts]);
+      magazineFormRef.current?.reset();
+      setSelectedBlogImageNames("");
+      setSelectedBlogPdfName("");
+      setFeedback({ severity: "success", message: "Magazine issue published successfully." });
+    } catch (error) {
+      setFeedback({
+        severity: "error",
+        message: error instanceof Error ? error.message : "Unable to publish issue.",
       });
     } finally {
       setIsSavingPost(false);
@@ -2453,6 +2569,28 @@ const AdminScreen: React.FC = () => {
     }
   };
 
+  const handleResolveMagazineRequest = async (requestUser: AuthUser, status: "approved" | "rejected") => {
+    setResolvingMagazineRequestId(requestUser._id);
+    try {
+      await resolveMagazineRequest(requestUser._id, status);
+      setMagazineRequests((currentRequests) => currentRequests.filter((currentUser) => currentUser._id !== requestUser._id));
+      setFeedback({
+        severity: "success",
+        message:
+          status === "approved"
+            ? `${requestUser.name}'s magazine access is now approved.`
+            : `${requestUser.name}'s magazine payment was rejected.`,
+      });
+    } catch (error) {
+      setFeedback({
+        severity: "error",
+        message: error instanceof Error ? error.message : "Unable to update magazine request.",
+      });
+    } finally {
+      setResolvingMagazineRequestId(null);
+    }
+  };
+
   const handleDeleteUser = async (targetUser: AuthUser) => {
     setDeletingId(targetUser._id);
     try {
@@ -2688,9 +2826,10 @@ const AdminScreen: React.FC = () => {
                   { label: "Past edition images", value: pastEditions.length, icon: <PhotoLibrary /> },
                   { label: "Testimonies", value: testimonies.length, icon: <AutoStories /> },
                   { label: "Interviews", value: interviews.length, icon: <Article /> },
-                { label: "Gallery photos", value: galleryPhotos.length, icon: <PhotoLibrary /> },
-                { label: "Commemorative", value: compendiumSubmissions.length, icon: <AutoStories /> },
-                { label: "Admin requests", value: adminRequests.length, icon: <AdminPanelSettings /> },
+                  { label: "Gallery photos", value: galleryPhotos.length, icon: <PhotoLibrary /> },
+                  { label: "Commemorative", value: compendiumSubmissions.length, icon: <AutoStories /> },
+                  { label: "Admin requests", value: adminRequests.length, icon: <AdminPanelSettings /> },
+                  { label: "Magazine approvals", value: magazineRequests.length, icon: <AutoStories /> },
                   { label: "Contact messages", value: messages.length, icon: <Mail /> },
                 ].map((item) => (
                   <Paper key={item.label} elevation={0} sx={{ p: 2.25, border: "1px solid #e6e8ec", borderRadius: 2 }}>
@@ -2795,6 +2934,7 @@ const AdminScreen: React.FC = () => {
           )}
 
           {(activeView === "posts" ||
+            activeView === "magazines" ||
             activeView === "news" ||
             activeView === "events" ||
             activeView === "pastEditions" ||
@@ -2823,22 +2963,25 @@ const AdminScreen: React.FC = () => {
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
                     <Add sx={{ color: "#caa64a" }} />
                     <Typography variant="h6" sx={{ fontWeight: 900 }}>
-                      Create Blog
+                      Publish Blog Post
                     </Typography>
                   </Box>
-                  <Chip size="small" label="Blog API" sx={{ bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 800 }} />
+                  <Chip
+                    size="small"
+                    label="Blog workflow"
+                    sx={{ bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 800 }}
+                  />
                 </Box>
 
                 <Divider />
 
                 <TextField required label="Blog title" name="title" fullWidth />
 
-                <TextField select required label="Type" name="type" defaultValue="Magazine" fullWidth>
-                  <MenuItem value="Magazine">Magazine</MenuItem>
+                <TextField select required label="Post type" name="type" defaultValue="Book" fullWidth>
                   <MenuItem value="Book">Book</MenuItem>
                 </TextField>
 
-                <TextField required multiline minRows={5} label="Description" name="desc" fullWidth />
+                <TextField required multiline minRows={5} label="Blog description" name="desc" fullWidth />
 
                 <Box>
                   <Button
@@ -2872,9 +3015,6 @@ const AdminScreen: React.FC = () => {
                   <Typography sx={{ color: "#667085", fontSize: 13, mt: 1 }}>
                     {selectedBlogImageNames || "No image selected"}
                   </Typography>
-                  <Typography sx={{ color: "#667085", fontSize: 13, mt: 0.5 }}>
-                    Choose up to {MAX_EVENT_IMAGES} images. Each image must be {MAX_IMAGE_SIZE_LABEL} or smaller.
-                  </Typography>
                 </Box>
 
                 <Button
@@ -2895,6 +3035,172 @@ const AdminScreen: React.FC = () => {
                 </Button>
               </Stack>
             </Paper>
+            )}
+
+            {activeView === "magazines" && can("posts:create") && (
+              <Paper
+                ref={magazineFormRef}
+                component="form"
+                onSubmit={handleMagazineSubmit}
+                elevation={0}
+                sx={{ p: { xs: 2, md: 3 }, border: "1px solid #e6e8ec", borderRadius: 2 }}
+              >
+                <Stack spacing={2.2}>
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
+                      <LibraryBooks sx={{ color: "#caa64a" }} />
+                      <Typography variant="h6" sx={{ fontWeight: 900 }}>
+                        Publish Magazine Issue
+                      </Typography>
+                    </Box>
+                    <Chip
+                      size="small"
+                      label="Issue builder"
+                      sx={{ bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 800 }}
+                    />
+                  </Box>
+
+                  <Divider />
+
+                  <TextField required label="Issue title" name="title" fullWidth />
+                  <TextField
+                    label="Secure download URL"
+                    name="downloadUrl"
+                    fullWidth
+                    helperText="Optional if you upload the PDF directly. Approved readers will open this link or the uploaded file."
+                  />
+                  <TextField required multiline minRows={5} label="Issue description" name="desc" fullWidth />
+
+                  <Box
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: { xs: "1fr", md: "1.05fr 0.95fr" },
+                      gap: 2,
+                      alignItems: "start",
+                    }}
+                  >
+                    <Stack spacing={2} sx={{ p: 2, borderRadius: 2, bgcolor: "#faf7ef", border: "1px solid #efe2bc" }}>
+                      <Box>
+                        <Button
+                          component="label"
+                          variant="outlined"
+                          startIcon={<CloudUpload />}
+                          sx={{
+                            borderColor: "#caa64a",
+                            color: "#6f5517",
+                            textTransform: "none",
+                            fontWeight: 900,
+                            "&:hover": { borderColor: "#caa64a", bgcolor: "#f7edd0" },
+                          }}
+                        >
+                          Select cover page
+                          <input
+                            hidden
+                            required
+                            type="file"
+                            name="images"
+                            accept="image/*"
+                            onChange={(changeEvent) => {
+                              const selectedFile = Array.from(changeEvent.target.files || [])[0];
+                              setSelectedBlogImageNames(selectedFile?.name || "");
+                            }}
+                          />
+                        </Button>
+                        <Typography sx={{ color: "#667085", fontSize: 13, mt: 1 }}>
+                          {selectedBlogImageNames || "No cover page selected"}
+                        </Typography>
+                      </Box>
+
+                      <Box>
+                        <Button
+                          component="label"
+                          variant="outlined"
+                          startIcon={<CloudUpload />}
+                          sx={{
+                            borderColor: "#caa64a",
+                            color: "#6f5517",
+                            textTransform: "none",
+                            fontWeight: 900,
+                            "&:hover": { borderColor: "#caa64a", bgcolor: "#f7edd0" },
+                          }}
+                        >
+                          Upload magazine PDF
+                          <input
+                            hidden
+                            type="file"
+                            name="pdfFile"
+                            accept="application/pdf,.pdf"
+                            onChange={(changeEvent) => {
+                              const selectedFile = Array.from(changeEvent.target.files || [])[0];
+                              setSelectedBlogPdfName(selectedFile?.name || "");
+                            }}
+                          />
+                        </Button>
+                        <Typography sx={{ color: "#667085", fontSize: 13, mt: 1 }}>
+                          {selectedBlogPdfName || "No PDF selected"}
+                        </Typography>
+                      </Box>
+
+                      <Typography sx={{ color: "#6f5517", fontSize: 13, lineHeight: 1.7 }}>
+                        Magazine issues should ship with one public cover page and one full PDF. The cover appears in
+                        the archive; the PDF is unlocked only for approved readers.
+                      </Typography>
+                    </Stack>
+
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        p: 2,
+                        borderRadius: 2,
+                        bgcolor: "#111318",
+                        color: "#fff",
+                        border: "1px solid #1f2430",
+                      }}
+                    >
+                      <Stack spacing={1.5}>
+                        <Typography sx={{ fontWeight: 900, fontSize: 16 }}>Publishing checklist</Typography>
+                        {[
+                          "Use one strong cover image that represents the issue.",
+                          "Attach the full PDF so approved readers can download immediately.",
+                          "Keep the description short, editorial, and premium.",
+                          "Confirm the secure download URL if you are not uploading the PDF directly.",
+                        ].map((item) => (
+                          <Box key={item} sx={{ display: "flex", gap: 1.1, alignItems: "flex-start" }}>
+                            <Box
+                              sx={{
+                                mt: "7px",
+                                width: 8,
+                                height: 8,
+                                borderRadius: "50%",
+                                bgcolor: "#caa64a",
+                                flexShrink: 0,
+                              }}
+                            />
+                            <Typography sx={{ color: "#d7dce5", fontSize: 13.5, lineHeight: 1.7 }}>{item}</Typography>
+                          </Box>
+                        ))}
+                      </Stack>
+                    </Paper>
+                  </Box>
+
+                  <Button
+                    type="submit"
+                    disabled={isSavingPost}
+                    startIcon={<Save />}
+                    sx={{
+                      alignSelf: "flex-start",
+                      bgcolor: "#111318",
+                      color: "#fff",
+                      textTransform: "none",
+                      fontWeight: 900,
+                      px: 3,
+                      "&:hover": { bgcolor: "#2a2f38" },
+                    }}
+                  >
+                    {isSavingPost ? "Publishing issue..." : "Publish issue"}
+                  </Button>
+                </Stack>
+              </Paper>
             )}
 
             {activeView === "news" && can("news:create") && (
@@ -4954,6 +5260,48 @@ const AdminScreen: React.FC = () => {
             </Paper>
             )}
 
+            {activeView === "magazineRequests" && (
+            <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid #e6e8ec", borderRadius: 2 }}>
+              <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2, mb: 2 }}>
+                <Typography variant="h6" sx={{ fontWeight: 900 }}>Pending Magazine Payments</Typography>
+                <Chip size="small" label={`${magazineRequests.length} pending`} sx={{ bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 900 }} />
+              </Box>
+              <Stack spacing={1.5}>
+                {magazineRequests.map((requestUser) => (
+                  <Box key={requestUser._id} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) auto" }, gap: 1.5, p: 2, border: "1px solid #edf0f2", borderRadius: 1.5 }}>
+                    <Box>
+                      <Typography sx={{ fontWeight: 900 }}>{requestUser.name}</Typography>
+                      <Typography sx={{ color: "#667085", fontSize: 13, overflowWrap: "anywhere" }}>{requestUser.email} - {requestUser.phonenumber}</Typography>
+                      <Typography sx={{ color: "#667085", fontSize: 13, mt: 0.75 }}>
+                        Reference: {requestUser.magazineAccessReference || "No payment reference provided"}
+                      </Typography>
+                      <Typography sx={{ color: "#667085", fontSize: 13, mt: 0.5 }}>
+                        Status: {requestUser.magazineAccessStatus}
+                      </Typography>
+                    </Box>
+                    <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                      <Button
+                        onClick={() => void handleResolveMagazineRequest(requestUser, "approved")}
+                        disabled={resolvingMagazineRequestId === requestUser._id}
+                        sx={{ bgcolor: "#12372A", color: "#fff", textTransform: "none", fontWeight: 900 }}
+                      >
+                        Approve
+                      </Button>
+                      <Button
+                        onClick={() => void handleResolveMagazineRequest(requestUser, "rejected")}
+                        disabled={resolvingMagazineRequestId === requestUser._id}
+                        sx={{ color: "#b42318", border: "1px solid #fda29b", textTransform: "none", fontWeight: 900 }}
+                      >
+                        Reject
+                      </Button>
+                    </Stack>
+                  </Box>
+                ))}
+                {!magazineRequests.length && !isLoading && <Typography sx={{ color: "#667085" }}>No pending magazine payments.</Typography>}
+              </Stack>
+            </Paper>
+            )}
+
             {activeView === "users" && (
             <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid #e6e8ec", borderRadius: 2 }}>
               <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2, mb: 2 }}>
@@ -5203,10 +5551,35 @@ const AdminScreen: React.FC = () => {
               )}
 
               {pendingEdit?.kind === "post" && (
-                <TextField select required label="Type" name="type" defaultValue={pendingEdit.item.type || "Magazine"} fullWidth>
-                  <MenuItem value="Magazine">Magazine</MenuItem>
-                  <MenuItem value="Book">Book</MenuItem>
-                </TextField>
+                <>
+                  <TextField select required label="Type" name="type" defaultValue={pendingEdit.item.type || "Magazine"} fullWidth>
+                    <MenuItem value="Magazine">Magazine</MenuItem>
+                    <MenuItem value="Book">Book</MenuItem>
+                  </TextField>
+                  <TextField
+                    label="Magazine download URL"
+                    name="downloadUrl"
+                    fullWidth
+                    defaultValue={pendingEdit.item.downloadUrl || ""}
+                    helperText="Optional for books. For magazines, add the secure PDF or file URL that approved readers can open."
+                  />
+                  <Button
+                    component="label"
+                    variant="outlined"
+                    startIcon={<CloudUpload />}
+                    sx={{
+                      borderColor: "#caa64a",
+                      color: "#6f5517",
+                      textTransform: "none",
+                      fontWeight: 900,
+                      justifyContent: "flex-start",
+                      "&:hover": { borderColor: "#caa64a", bgcolor: "#f7edd0" },
+                    }}
+                  >
+                    Replace PDF file
+                    <input hidden type="file" name="pdfFile" accept="application/pdf,.pdf" />
+                  </Button>
+                </>
               )}
 
               {(pendingEdit?.kind === "post" || pendingEdit?.kind === "news" || pendingEdit?.kind === "event") && (

@@ -6,6 +6,7 @@ import {
   loginUser,
   logoutUser,
   requestBloggerAccess,
+  requestMagazineAccess,
   registerUser,
   requestAdminAccess,
   setStoredAuthToken,
@@ -92,6 +93,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return result.user;
   }, []);
 
+  const requestMagazine = useCallback(async (reference: string, note?: string) => {
+    const result = await requestMagazineAccess({ reference, note });
+    setUser(result.user);
+    return result.user;
+  }, []);
+
   const changePassword = useCallback(async (currentPassword: string, newPassword: string, confirmPassword: string) => {
     await changePasswordRequest(currentPassword, newPassword, confirmPassword);
     clearStoredAuthToken();
@@ -99,8 +106,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const value = useMemo(
-    () => ({ user, isLoading, login, register, logout, requestAdmin, requestBlogger, changePassword, refreshUser }),
-    [user, isLoading, login, register, logout, requestAdmin, requestBlogger, changePassword, refreshUser]
+    () => ({
+      user,
+      isLoading,
+      login,
+      register,
+      logout,
+      requestAdmin,
+      requestBlogger,
+      requestMagazine,
+      changePassword,
+      refreshUser,
+    }),
+    [user, isLoading, login, register, logout, requestAdmin, requestBlogger, requestMagazine, changePassword, refreshUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

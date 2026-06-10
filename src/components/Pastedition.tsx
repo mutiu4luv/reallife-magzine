@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Box, IconButton, Typography } from "@mui/material";
 import KeyboardArrowLeftIcon from "@mui/icons-material/KeyboardArrowLeft";
 import KeyboardArrowRightIcon from "@mui/icons-material/KeyboardArrowRight";
-import { loadPastEditions, loadPosts } from "../services/contentApi";
+import { loadPastEditions } from "../services/contentApi";
 
 type EditionImage = {
   src: string;
@@ -34,9 +34,7 @@ const Pastedition: React.FC = () => {
 
     const fetchImages = async () => {
       try {
-        const [pastEditionResult, postResult] = await Promise.allSettled([loadPastEditions(), loadPosts()]);
-        const pastEditions = pastEditionResult.status === "fulfilled" ? pastEditionResult.value : [];
-        const posts = postResult.status === "fulfilled" ? postResult.value : [];
+        const pastEditions = await loadPastEditions();
 
         const uploadedImages = pastEditions
           .filter((edition) => edition.image)
@@ -45,21 +43,8 @@ const Pastedition: React.FC = () => {
             alt: edition.title || `Past edition ${index + 1}`,
           }));
 
-        const postImages = posts.filter((post) => post.type !== "Book").flatMap((post, postIndex) => {
-          const postImages = post.images?.length ? post.images : post.image ? [post.image] : [];
-
-          return postImages
-            .filter(Boolean)
-            .map((src, imageIndex) => ({
-              src,
-              alt: post.title ? `${post.title} edition ${imageIndex + 1}` : `Past edition ${postIndex + 1}`,
-            }));
-        });
-
-        const nextImages = [...uploadedImages, ...postImages];
-
         if (isMounted) {
-          setImages(nextImages);
+          setImages(uploadedImages);
         }
       } catch {
         if (isMounted) {
@@ -178,8 +163,8 @@ const Pastedition: React.FC = () => {
             textAlign: "left",
           }}
         >
-          Take a look  at  past editions of Reality Life Magazine, capturing Moments, inspiring stories,
-          memorable features and the voices that shape our society. At Reality Life Magazine, we celebrate culture, We document histories/events, for a lasting memories. Your legacies lives on...
+          Explore selected past editions of Reality Life Magazine. Each cover below represents a documented issue,
+          preserved exactly as published for readers who want to revisit the archive.
         </Typography>
       </Box>
 

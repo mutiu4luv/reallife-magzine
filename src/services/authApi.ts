@@ -5,6 +5,7 @@ const AUTH_TOKEN_KEY = "realitylife_admin_token";
 export type UserRole = "user" | "blogger" | "admin";
 export type AdminRequestStatus = "none" | "pending" | "approved" | "rejected";
 export type PermissionRequestStatus = "none" | "pending" | "approved" | "rejected";
+export type MagazineAccessStatus = "none" | "pending" | "approved" | "rejected";
 
 export const AVAILABLE_PERMISSIONS = [
   "posts:create",
@@ -40,6 +41,10 @@ export type AuthUser = {
   adminRequestStatus: AdminRequestStatus;
   permissionRequestStatus: PermissionRequestStatus;
   requestedPermissions: Permission[];
+  magazineAccessStatus: MagazineAccessStatus;
+  magazineAccessReference?: string;
+  magazineAccessRequestedAt?: string;
+  magazineAccessApprovedAt?: string;
 };
 
 export type AuthResponse = {
@@ -90,6 +95,10 @@ const normalizeUser = (user: AuthUser): AuthUser => ({
   requestedPermissions: normalizePermissions(user.requestedPermissions).filter(
     (permission): permission is Permission => permission !== "*"
   ),
+  magazineAccessStatus: (user.magazineAccessStatus as MagazineAccessStatus) || "none",
+  magazineAccessReference: user.magazineAccessReference || "",
+  magazineAccessRequestedAt: user.magazineAccessRequestedAt || "",
+  magazineAccessApprovedAt: user.magazineAccessApprovedAt || "",
 });
 
 const normalizeAuthResponse = (response: AuthResponse): AuthResponse => ({
@@ -119,8 +128,15 @@ export const getAuthHeaders = () => {
 
 const getErrorMessage = async (response: Response, fallback: string) => {
   try {
-    const data = await response.json();
-    return data?.error || data?.message || fallback;
+    const contentType = response.headers.get("content-type") || "";
+
+    if (contentType.includes("application/json")) {
+      const data = await response.json();
+      return data?.error || data?.message || fallback;
+    }
+
+    const text = await response.text();
+    return text || fallback;
   } catch {
     return fallback;
   }
@@ -183,6 +199,13 @@ export const requestBloggerAccess = () =>
     "Unable to request blogger access."
   ).then(normalizeUserResponse);
 
+export const requestMagazineAccess = (payload: { reference: string; note?: string }) =>
+  authRequest<{ user: AuthUser; message: string }>(
+    "/request-magazine-access",
+    { method: "POST", body: JSON.stringify(payload) },
+    "Unable to request magazine access."
+  ).then(normalizeUserResponse);
+
 export const changePassword = (currentPassword: string, newPassword: string, confirmPassword: string) =>
   authRequest<{ message: string }>(
     "/change-password",
@@ -197,6 +220,11 @@ export const loadAdminRequests = () =>
 
 export const loadPermissionRequests = () =>
   authRequest<AuthUser[]>("/permission-requests", undefined, "Unable to load permission requests.").then((users) =>
+    users.map(normalizeUser)
+  );
+
+export const loadMagazineRequests = () =>
+  authRequest<AuthUser[]>("/magazine-requests", undefined, "Unable to load magazine requests.").then((users) =>
     users.map(normalizeUser)
   );
 
@@ -235,6 +263,13 @@ export const resolvePermissionRequest = (
     `/permission-requests/${userId}`,
     { method: "PATCH", body: JSON.stringify({ status }) },
     "Unable to update blogger request."
+  ).then(normalizeUserResponse);
+
+export const resolveMagazineRequest = (userId: string, status: "approved" | "rejected") =>
+  authRequest<{ user: AuthUser }>(
+    `/magazine-requests/${userId}`,
+    { method: "PATCH", body: JSON.stringify({ status }) },
+    "Unable to update magazine request."
   ).then(normalizeUserResponse);
 
 export const hasPermission = (user: AuthUser | null | undefined, permission: Permission) =>

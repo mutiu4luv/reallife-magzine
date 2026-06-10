@@ -9,6 +9,7 @@ export type AuthContextValue = {
   logout: () => Promise<void>;
   requestAdmin: () => Promise<AuthUser>;
   requestBlogger: () => Promise<AuthUser>;
+  requestMagazine: (reference: string, note?: string) => Promise<AuthUser>;
   changePassword: (currentPassword: string, newPassword: string, confirmPassword: string) => Promise<void>;
   refreshUser: () => Promise<AuthUser | null>;
 };

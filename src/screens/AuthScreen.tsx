@@ -23,6 +23,33 @@ type AuthScreenProps = {
 const gold = "#A67C1B";
 const green = "#12372A";
 
+const getFriendlyAuthMessage = (error: unknown, fallback: string) => {
+  const message = error instanceof Error ? error.message.trim() : "";
+
+  if (!message) {
+    return fallback;
+  }
+
+  const normalizedMessage = message.toLowerCase();
+  if (normalizedMessage.includes("invalid login credentials")) {
+    return "Invalid email or phone number, or password.";
+  }
+
+  if (normalizedMessage.includes("email or phonenumber and password are required")) {
+    return "Email or phone number and password are required.";
+  }
+
+  if (normalizedMessage.includes("unable to login")) {
+    return "Unable to login. Please try again.";
+  }
+
+  if (normalizedMessage.includes("unable to register")) {
+    return "Unable to register. Please try again.";
+  }
+
+  return message;
+};
+
 const AuthScreen: React.FC<AuthScreenProps> = ({ mode }) => {
   const navigate = useNavigate();
   const { user, login, register, isLoading } = useAuth();
@@ -40,34 +67,58 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ mode }) => {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
+    const name = String(formData.get("name") || "").trim();
+    const email = String(formData.get("email") || "").trim();
+    const phonenumber = String(formData.get("phonenumber") || "").trim();
+    const address = String(formData.get("address") || "").trim();
+    const state = String(formData.get("state") || "").trim();
+    const identifier = String(formData.get("identifier") || "").trim();
+    const password = String(formData.get("password") || "");
+
     setIsSubmitting(true);
     setFeedback(null);
 
     try {
       if (isRegister) {
+        if (!name || !email || !phonenumber || !address || !state || !password) {
+          setFeedback({
+            severity: "error",
+            message: "All registration fields are required.",
+          });
+          return;
+        }
+
         const registeredUser = await register({
-          name: String(formData.get("name") || "").trim(),
-          email: String(formData.get("email") || "").trim(),
-          phonenumber: String(formData.get("phonenumber") || "").trim(),
-          password: String(formData.get("password") || ""),
-          address: String(formData.get("address") || "").trim(),
-          state: String(formData.get("state") || "").trim(),
+          name,
+          email,
+          phonenumber,
+          password,
+          address,
+          state,
         });
 
         navigate((registeredUser.permissions || []).length > 0 || registeredUser.role === "admin" ? "/admin" : "/dashboard", { replace: true });
         return;
       }
 
+      if (!identifier || !password) {
+        setFeedback({
+          severity: "error",
+          message: "Email or phone number and password are required.",
+        });
+        return;
+      }
+
       const loggedInUser = await login(
-        String(formData.get("identifier") || "").trim(),
-        String(formData.get("password") || "")
+        identifier,
+        password
       );
 
       navigate(loggedInUser.role === "admin" || (loggedInUser.permissions || []).length > 0 ? "/admin" : "/dashboard", { replace: true });
     } catch (error) {
       setFeedback({
         severity: "error",
-        message: error instanceof Error ? error.message : isRegister ? "Unable to register." : "Unable to login.",
+        message: getFriendlyAuthMessage(error, isRegister ? "Unable to register." : "Unable to login."),
       });
     } finally {
       setIsSubmitting(false);
