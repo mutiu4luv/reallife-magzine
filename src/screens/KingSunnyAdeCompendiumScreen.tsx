@@ -49,7 +49,7 @@ const buildMailtoHref = (subject: string, body: string) =>
 const authorizationHighlights = [
   "Official mandate to compile, produce, print, publish, market, and distribute the commemorative compendium.",
   "Authority to gather interviews, photographs, tributes, adverts, sponsorships, articles, and historical materials.",
-  "Launch, sales, and revenue management aligned with the agreed framework.",
+  // "Launch, sales, and revenue management aligned with the agreed framework.",
 ];
 
 const KingSunnyAdeCompendiumScreen: React.FC = () => {
