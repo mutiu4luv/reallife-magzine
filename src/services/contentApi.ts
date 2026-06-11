@@ -39,6 +39,20 @@ export type PostItem = {
   createdAt?: string;
 };
 
+export type MagazineItem = {
+  _id?: string;
+  id?: string;
+  title: string;
+  desc?: string;
+  image: string;
+  coverImage?: string;
+  images?: string[];
+  downloadUrl?: string;
+  createdAt?: string;
+  deletedAt?: string | null;
+  isDeleted?: boolean;
+};
+
 export type EventItem = {
   _id?: string;
   id?: string;
@@ -155,6 +169,14 @@ const normalizePostItem = (item: PostItem): PostItem => ({
   images: sanitizeImageList(Array.isArray(item.images) ? item.images : item.image ? [item.image] : []),
 });
 
+const normalizeMagazineItem = (item: MagazineItem): MagazineItem => ({
+  ...item,
+  desc: item.desc || "",
+  coverImage: sanitizeImageUrl(item.coverImage) || sanitizeImageUrl(item.image) || sanitizeImageUrl(item.images?.[0]) || "",
+  image: sanitizeImageUrl(item.image) || sanitizeImageUrl(item.images?.[0]) || "",
+  images: sanitizeImageList(Array.isArray(item.images) ? item.images : item.image ? [item.image] : []),
+});
+
 const sanitizeImageUrl = (value?: string | null) => {
   const raw = String(value || "").trim();
   if (!raw) return "";
@@ -198,6 +220,14 @@ export const requestJson = async <T,>(
   init?: RequestInit,
   fallback = "Request failed."
 ) => {
+  const headers = new Headers(init?.headers);
+  const authHeaders = getAuthHeaders();
+  Object.entries(authHeaders).forEach(([key, value]) => headers.set(key, value));
+
+  if (!(init?.body instanceof FormData) && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
   const expandedEndpoints = endpoints.flatMap((endpoint) => {
     if (!endpoint.startsWith(LOCAL_API_BASE_URL) || endpoint.startsWith(DEPLOYED_API_BASE_URL)) {
       return [endpoint];
@@ -210,7 +240,10 @@ export const requestJson = async <T,>(
 
   for (const endpoint of expandedEndpoints) {
     try {
-      const response = await fetch(endpoint, init);
+      const response = await fetch(endpoint, {
+        ...init,
+        headers,
+      });
 
       if (response.status === 404 && endpoint !== expandedEndpoints[expandedEndpoints.length - 1]) {
         lastError = await getErrorMessage(response, fallback);
@@ -256,11 +289,37 @@ export const loadMagazines = async (page = 1, limit = 12) => {
     "Unable to load magazines."
   );
 
-  const items = normalizeCollection<PostItem>(response?.data).map(normalizePostItem);
+  const items = normalizeCollection<MagazineItem>(response?.data).map(normalizeMagazineItem);
   const meta = response?.meta || { page, limit, total: items.length, hasMore: false };
 
   return { items, meta };
 };
+
+export const loadMagazineById = async (id: string) =>
+  normalizeMagazineItem(
+    await requestJson<MagazineItem>([`${MAGAZINES_ENDPOINT}/${id}`], undefined, "Unable to load magazine.")
+  );
+
+export const createMagazine = async (formData: FormData) =>
+  normalizeMagazineItem(
+    await requestJson<MagazineItem>(
+      [MAGAZINES_ENDPOINT],
+      { method: "POST", body: formData },
+      "Unable to create magazine."
+    )
+  );
+
+export const updateMagazine = async (id: string, formData: FormData) =>
+  normalizeMagazineItem(
+    await requestJson<MagazineItem>(
+      [`${MAGAZINES_ENDPOINT}/${id}`],
+      { method: "PATCH", body: formData },
+      "Unable to update magazine."
+    )
+  );
+
+export const deleteMagazine = async (id: string) =>
+  requestJson<{ message: string }>([`${MAGAZINES_ENDPOINT}/${id}`], { method: "DELETE" }, "Unable to delete magazine.");
 
 export const loadPastEditions = async () =>
   normalizeCollection<PastEditionItem>(

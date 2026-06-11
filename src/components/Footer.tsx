@@ -21,7 +21,15 @@ import {
   ArrowForwardRounded,
 } from "@mui/icons-material";
 import { Link as RouterLink } from "react-router-dom";
-
+import {
+  magazineAdminPhone,
+  magazineAdminWhatsApp,
+  magazineAccountName,
+  magazineAccountNumber,
+  magazineBankName,
+  magazineReceiptLine,
+  magazineSupportEmail,
+} from "../constants/editorialContact";
 const gold = "#D6B15A";
 const softGold = "#F5E2B8";
 
@@ -299,17 +307,43 @@ const Footer: React.FC = () => {
 
             <Stack spacing={1} sx={{ mb: 2.5 }}>
               <Typography sx={{ color: "rgba(255,255,255,0.82)", fontWeight: 700 }}>
-                Email: realitylifemagazine@gmail.com
+                Email: {magazineSupportEmail}
               </Typography>
               <Typography sx={{ color: "rgba(255,255,255,0.82)", fontWeight: 700 }}>
-                Phone: +234 706 612 2290
+                Phone: {magazineAdminPhone}
               </Typography>
             </Stack>
+
+            <Box
+              sx={{
+                mb: 2.5,
+                p: 2,
+                borderRadius: 2.5,
+                bgcolor: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.08)",
+              }}
+            >
+              <Typography sx={{ color: softGold, fontWeight: 900, mb: 0.75 }}>
+                Magazine payment details
+              </Typography>
+              <Typography sx={{ color: "rgba(255,255,255,0.82)", fontWeight: 700 }}>
+                Bank: {magazineBankName}
+              </Typography>
+              <Typography sx={{ color: "rgba(255,255,255,0.82)", fontWeight: 700 }}>
+                Account name: {magazineAccountName}
+              </Typography>
+              <Typography sx={{ color: "rgba(255,255,255,0.82)", fontWeight: 700 }}>
+                Account number: {magazineAccountNumber}
+              </Typography>
+              <Typography sx={{ color: "rgba(255,255,255,0.82)", fontWeight: 700 }}>
+                Receipt line: {magazineReceiptLine}
+              </Typography>
+            </Box>
 
             <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.1 }}>
               <Button
                 component="a"
-                href="mailto:realitylifemagazine@gmail.com"
+                href={`mailto:${magazineSupportEmail}`}
                 startIcon={<Email />}
                 variant="outlined"
                 sx={{
@@ -328,7 +362,7 @@ const Footer: React.FC = () => {
               </Button>
               <Button
                 component="a"
-                href="https://wa.me/message/JW2BTKJVKKI6K1"
+                href={magazineAdminWhatsApp}
                 target="_blank"
                 rel="noreferrer"
                 startIcon={<WhatsApp />}

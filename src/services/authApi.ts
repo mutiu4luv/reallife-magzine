@@ -6,6 +6,7 @@ export type UserRole = "user" | "blogger" | "admin";
 export type AdminRequestStatus = "none" | "pending" | "approved" | "rejected";
 export type PermissionRequestStatus = "none" | "pending" | "approved" | "rejected";
 export type MagazineAccessStatus = "none" | "pending" | "approved" | "rejected";
+export type MagazinePurchaseStatus = "pending" | "approved" | "rejected";
 
 export const AVAILABLE_PERMISSIONS = [
   "posts:create",
@@ -45,6 +46,16 @@ export type AuthUser = {
   magazineAccessReference?: string;
   magazineAccessRequestedAt?: string;
   magazineAccessApprovedAt?: string;
+  magazinePurchases?: Array<{
+    magazineId: string;
+    magazineTitle?: string;
+    status: MagazinePurchaseStatus;
+    reference?: string;
+    note?: string;
+    requestedAt?: string;
+    approvedAt?: string;
+    rejectedAt?: string;
+  }>;
 };
 
 export type AuthResponse = {
@@ -78,6 +89,7 @@ export type AuditLog = {
 };
 
 const AUTH_ENDPOINT = `${API_BASE_URL}/api/auth`;
+const MAGAZINES_ENDPOINT = `${API_BASE_URL}/api/magazines`;
 
 const normalizePermissions = (value: unknown): Array<Permission | "*"> =>
   Array.isArray(value)
@@ -99,6 +111,20 @@ const normalizeUser = (user: AuthUser): AuthUser => ({
   magazineAccessReference: user.magazineAccessReference || "",
   magazineAccessRequestedAt: user.magazineAccessRequestedAt || "",
   magazineAccessApprovedAt: user.magazineAccessApprovedAt || "",
+  magazinePurchases: Array.isArray(user.magazinePurchases)
+    ? user.magazinePurchases
+        .map((purchase) => ({
+          magazineId: String((purchase as { magazineId?: unknown }).magazineId || ""),
+          magazineTitle: String((purchase as { magazineTitle?: unknown }).magazineTitle || ""),
+          status: (purchase as { status?: MagazinePurchaseStatus }).status || "pending",
+          reference: String((purchase as { reference?: unknown }).reference || ""),
+          note: String((purchase as { note?: unknown }).note || ""),
+          requestedAt: String((purchase as { requestedAt?: unknown }).requestedAt || ""),
+          approvedAt: String((purchase as { approvedAt?: unknown }).approvedAt || ""),
+          rejectedAt: String((purchase as { rejectedAt?: unknown }).rejectedAt || ""),
+        }))
+        .filter((purchase) => Boolean(purchase.magazineId))
+    : [],
 });
 
 const normalizeAuthResponse = (response: AuthResponse): AuthResponse => ({
@@ -165,6 +191,29 @@ export const authRequest = async <T,>(path: string, init?: RequestInit, fallback
   return (text ? JSON.parse(text) : undefined) as T;
 };
 
+const magazineRequest = async <T,>(path: string, init?: RequestInit, fallback = "Request failed.") => {
+  const headers = new Headers(init?.headers);
+
+  if (!(init?.body instanceof FormData) && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  const authHeaders = getAuthHeaders();
+  Object.entries(authHeaders).forEach(([key, value]) => headers.set(key, value));
+
+  const response = await fetch(`${MAGAZINES_ENDPOINT}${path}`, {
+    ...init,
+    headers,
+  });
+
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response, fallback));
+  }
+
+  const text = await response.text();
+  return (text ? JSON.parse(text) : undefined) as T;
+};
+
 export const registerUser = (payload: RegisterPayload) =>
   authRequest<AuthResponse>(
     "/register",
@@ -206,6 +255,13 @@ export const requestMagazineAccess = (payload: { reference: string; note?: strin
     "Unable to request magazine access."
   ).then(normalizeUserResponse);
 
+export const requestMagazineIssueAccess = (magazineId: string, payload: { reference: string; note?: string }) =>
+  magazineRequest<{ user: AuthUser; message: string }>(
+    `/${magazineId}/request-access`,
+    { method: "POST", body: JSON.stringify(payload) },
+    "Unable to request magazine access."
+  ).then(normalizeUserResponse);
+
 export const changePassword = (currentPassword: string, newPassword: string, confirmPassword: string) =>
   authRequest<{ message: string }>(
     "/change-password",
@@ -224,7 +280,7 @@ export const loadPermissionRequests = () =>
   );
 
 export const loadMagazineRequests = () =>
-  authRequest<AuthUser[]>("/magazine-requests", undefined, "Unable to load magazine requests.").then((users) =>
+  magazineRequest<AuthUser[]>("/requests", undefined, "Unable to load magazine requests.").then((users) =>
     users.map(normalizeUser)
   );
 
@@ -265,9 +321,9 @@ export const resolvePermissionRequest = (
     "Unable to update blogger request."
   ).then(normalizeUserResponse);
 
-export const resolveMagazineRequest = (userId: string, status: "approved" | "rejected") =>
-  authRequest<{ user: AuthUser }>(
-    `/magazine-requests/${userId}`,
+export const resolveMagazineRequest = (userId: string, magazineId: string, status: "approved" | "rejected") =>
+  magazineRequest<{ user: AuthUser }>(
+    `/requests/${userId}/${magazineId}`,
     { method: "PATCH", body: JSON.stringify({ status }) },
     "Unable to update magazine request."
   ).then(normalizeUserResponse);

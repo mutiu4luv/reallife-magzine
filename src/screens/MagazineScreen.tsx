@@ -17,18 +17,21 @@ import LockIcon from "@mui/icons-material/Lock";
 import VerifiedIcon from "@mui/icons-material/Verified";
 import { useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../config/api";
+import {
+  magazineAccountName,
+  magazineAccountNumber,
+  magazineAdminPhone,
+  magazineAdminWhatsApp,
+  magazineBankName,
+  magazineReceiptLine,
+} from "../constants/editorialContact";
 import { useAuth } from "../context/useAuth";
-import { loadMagazines, type PostItem } from "../services/contentApi";
+import { loadMagazines, type MagazineItem } from "../services/contentApi";
 
 const pageBg = "#070B14";
 const gold = "#C9A24A";
 const ivory = "#F8F2E8";
 const muted = "#CBD5E1";
-const bankName = "Zenith Bank";
-const accountName = "Realitylife Magazine";
-const accountNumber = "1014673949";
-const receiptLine = "07066122290";
-
 const shellEffect = {
   background:
     "radial-gradient(circle at top left, rgba(201,162,74,0.18), transparent 24%), radial-gradient(circle at bottom right, rgba(255,255,255,0.08), transparent 30%), linear-gradient(135deg, rgba(7,11,20,1) 0%, rgba(12,18,33,1) 50%, rgba(18,55,42,0.8) 100%)",
@@ -36,8 +39,8 @@ const shellEffect = {
 
 const MagazineScreen: React.FC = () => {
   const navigate = useNavigate();
-  const { user, requestMagazine } = useAuth();
-  const [magazines, setMagazines] = useState<PostItem[]>([]);
+  const { user, requestMagazinePurchase } = useAuth();
+  const [magazines, setMagazines] = useState<MagazineItem[]>([]);
   const [pageMeta, setPageMeta] = useState({ page: 1, limit: 8, total: 0, hasMore: false });
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -46,6 +49,7 @@ const MagazineScreen: React.FC = () => {
   const [note, setNote] = useState("");
   const [submittingRequest, setSubmittingRequest] = useState(false);
   const [unlockingId, setUnlockingId] = useState("");
+  const [selectedMagazineId, setSelectedMagazineId] = useState("");
 
   useEffect(() => {
     let mounted = true;
@@ -76,8 +80,8 @@ const MagazineScreen: React.FC = () => {
     };
   }, [currentPage]);
 
-  const magazineAccessStatus = user?.magazineAccessStatus || "none";
-  const canDownload = magazineAccessStatus === "approved";
+  const getPurchaseForMagazine = (magazineId: string) =>
+    user?.magazinePurchases?.find((purchase) => purchase.magazineId === magazineId) || null;
 
   const handleRequestAccess = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -92,14 +96,19 @@ const MagazineScreen: React.FC = () => {
       return;
     }
 
+    if (!selectedMagazineId) {
+      setFeedback({ severity: "error", message: "Choose a magazine cover first." });
+      return;
+    }
+
     setSubmittingRequest(true);
     try {
-      await requestMagazine(reference.trim(), note.trim() || undefined);
+      await requestMagazinePurchase(selectedMagazineId, reference.trim(), note.trim() || undefined);
       setReference("");
       setNote("");
       setFeedback({
         severity: "success",
-        message: "Your payment proof was submitted. An admin will approve it shortly.",
+        message: "Your payment proof was submitted. The issue is now awaiting admin approval.",
       });
     } catch (error) {
       setFeedback({
@@ -111,7 +120,7 @@ const MagazineScreen: React.FC = () => {
     }
   };
 
-  const openDownload = async (item: PostItem) => {
+  const openDownload = async (item: MagazineItem) => {
     if (!item._id) {
       setFeedback({ severity: "error", message: "This issue does not have a download record yet." });
       return;
@@ -122,17 +131,18 @@ const MagazineScreen: React.FC = () => {
       return;
     }
 
-    if (!canDownload) {
+    const purchase = getPurchaseForMagazine(item._id);
+    if (purchase?.status !== "approved" && user.role !== "admin") {
       setFeedback({
         severity: "error",
-        message: "Your payment has not been approved yet. Please submit your proof of payment first.",
+        message: "This magazine is locked until your payment is approved.",
       });
       return;
     }
 
     setUnlockingId(item._id);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/posts/${item._id}/download`, {
+      const response = await fetch(`${API_BASE_URL}/api/magazines/${item._id}/download`, {
         headers: {
           ...(window.localStorage.getItem("realitylife_admin_token")
             ? { Authorization: `Bearer ${window.localStorage.getItem("realitylife_admin_token")}` }
@@ -163,8 +173,31 @@ const MagazineScreen: React.FC = () => {
     }
   };
 
-  const handleCoverClick = (item: PostItem) => {
-    void openDownload(item);
+  const handleReadIssue = async (item: MagazineItem) => {
+    await openDownload(item);
+  };
+
+  const handleCoverClick = (item: MagazineItem) => {
+    if (!user) {
+      navigate("/login");
+      return;
+    }
+
+    if (user.role === "admin") {
+      void openDownload(item);
+      return;
+    }
+
+    const purchase = getPurchaseForMagazine(item._id || "");
+    if (purchase?.status === "approved") {
+      void openDownload(item);
+      return;
+    }
+
+    setSelectedMagazineId(item._id || "");
+    setReference("");
+    setNote("");
+    document.getElementById("payment-gate")?.scrollIntoView({ behavior: "smooth" });
   };
 
   const pageCount = Math.max(1, Math.ceil(pageMeta.total / pageMeta.limit));
@@ -259,19 +292,33 @@ const MagazineScreen: React.FC = () => {
                   border: "1px solid rgba(255,255,255,0.08)",
                 }}
               >
-                <Typography sx={{ color: "#f7ddad", fontWeight: 900, mb: 0.5 }}>{bankName}</Typography>
-                <Typography sx={{ color: "#fff", fontWeight: 800 }}>{accountName}</Typography>
+                <Typography sx={{ color: "#f7ddad", fontWeight: 900, mb: 0.5 }}>{magazineBankName}</Typography>
+                <Typography sx={{ color: "#fff", fontWeight: 800 }}>{magazineAccountName}</Typography>
                 <Typography sx={{ color: "#fff", fontSize: 22, fontWeight: 950, letterSpacing: 1, mt: 0.75 }}>
-                  {accountNumber}
+                  {magazineAccountNumber}
                 </Typography>
                 <Typography sx={{ color: "#cbd5e1", mt: 1.25, lineHeight: 1.75 }}>
-                  Transfer the magazine fee to the account above, then submit your payment reference below. After
-                  admin approval, your download button unlocks automatically.
+                  Select a magazine cover below, then submit payment proof for that specific issue. After approval, the
+                  same cover unlocks for reading or download. After payment, contact the admin for approval.
                 </Typography>
                 <Typography sx={{ color: "#cbd5e1", mt: 1.25 }}>
                   WhatsApp receipt line:{" "}
                   <Box component="span" sx={{ color: "#fff", fontWeight: 900 }}>
-                    {receiptLine}
+                    {magazineReceiptLine}
+                  </Box>
+                </Typography>
+                <Typography sx={{ color: "#cbd5e1", mt: 1.25 }}>
+                  Admin WhatsApp:{" "}
+                  <Box component="span" sx={{ color: "#fff", fontWeight: 900 }}>
+                    {magazineAdminPhone}
+                  </Box>
+                </Typography>
+                <Typography sx={{ color: "#cbd5e1", mt: 1.25 }}>
+                  Admin contact:{" "}
+                  <Box component="span" sx={{ color: "#fff", fontWeight: 900 }}>
+                    <a href={magazineAdminWhatsApp} target="_blank" rel="noreferrer" style={{ color: "inherit" }}>
+                      Open WhatsApp
+                    </a>
                   </Box>
                 </Typography>
               </Box>
@@ -280,6 +327,11 @@ const MagazineScreen: React.FC = () => {
                 {!user && (
                   <Alert severity="info" sx={{ bgcolor: "rgba(255,255,255,0.04)", color: "#fff" }}>
                     Sign in first so we can link your payment proof to your account.
+                  </Alert>
+                )}
+                {selectedMagazineId && (
+                  <Alert severity="success" sx={{ bgcolor: "rgba(18,55,42,0.12)", color: "#fff" }}>
+                    Paying for: {magazines.find((magazine) => magazine._id === selectedMagazineId)?.title || "Selected magazine"}
                   </Alert>
                 )}
                 <TextField
@@ -319,7 +371,7 @@ const MagazineScreen: React.FC = () => {
                     "&:hover": { bgcolor: "#e2bb5a" },
                   }}
                 >
-                  {magazineAccessStatus === "pending" ? "Update proof of payment" : "Submit proof of payment"}
+                  Submit proof of payment
                 </Button>
               </Box>
             </Stack>
@@ -396,14 +448,18 @@ const MagazineScreen: React.FC = () => {
             >
               {magazines.map((issue, index) => {
                 const issueKey = issue._id || `${issue.title}-${index}`;
-                const locked = !canDownload;
                 const coverSrc = issue.coverImage || issue.image;
                 const isLatest = currentPage === 1 && index === 0;
-                const coverLabel = !user
-                  ? "Login or register to download"
-                  : canDownload
-                    ? "Tap cover to download"
-                    : "Payment approved to unlock";
+                const purchase = getPurchaseForMagazine(issue._id || "");
+                const canOpenIssue = user?.role === "admin" || purchase?.status === "approved";
+                const coverLabel =
+                  !user
+                    ? "Login or register"
+                    : user.role === "admin"
+                      ? "Admin download"
+                      : canOpenIssue
+                        ? "Tap cover to download"
+                        : "Tap cover to pay";
 
                 return (
                   <Paper
@@ -420,7 +476,7 @@ const MagazineScreen: React.FC = () => {
                   >
                     <ButtonBase
                       onClick={() => handleCoverClick(issue)}
-                      disabled={Boolean(unlockingId) || (user ? locked : false)}
+                      disabled={Boolean(unlockingId)}
                       sx={{
                         width: "100%",
                         display: "block",
@@ -443,7 +499,7 @@ const MagazineScreen: React.FC = () => {
                           }}
                         />
                         <Chip
-                          icon={!user ? <LockIcon /> : locked ? <LockIcon /> : <VerifiedIcon />}
+                          icon={!user ? <LockIcon /> : canOpenIssue ? <VerifiedIcon /> : <LockIcon />}
                           label={coverLabel}
                           sx={{
                             position: "absolute",
@@ -451,9 +507,9 @@ const MagazineScreen: React.FC = () => {
                             left: 14,
                             bgcolor: !user
                               ? "rgba(12,18,33,0.86)"
-                              : locked
-                                ? "rgba(12,18,33,0.82)"
-                                : "rgba(18,55,42,0.88)",
+                              : canOpenIssue
+                                ? "rgba(18,55,42,0.88)"
+                                : "rgba(12,18,33,0.82)",
                             color: "#fff",
                             fontWeight: 900,
                             maxWidth: "calc(100% - 28px)",
@@ -480,12 +536,58 @@ const MagazineScreen: React.FC = () => {
                         {issue.title}
                       </Typography>
                       <Typography sx={{ color: muted, fontSize: 13.5, lineHeight: 1.7 }}>
-                        {user
-                          ? canDownload
-                            ? "Approved readers can tap the cover to download."
-                            : "Complete payment approval to unlock the issue."
-                          : "Register or log in before downloading the full document."}
+                        {!user
+                          ? "Register or log in, then tap the cover to begin payment."
+                          : user.role === "admin"
+                            ? "Admin accounts can tap any cover to download immediately."
+                            : canOpenIssue
+                              ? "Approved readers can tap the cover to download."
+                              : "Tap the cover to pay for this specific issue."}
                       </Typography>
+                      <Stack direction="row" spacing={1} sx={{ pt: 0.5, flexWrap: "wrap" }}>
+                        <Button
+                          size="small"
+                          onClick={() => void handleReadIssue(issue)}
+                          disabled={loading || Boolean(unlockingId) || !canOpenIssue}
+                          sx={{
+                            bgcolor: canOpenIssue ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.05)",
+                            color: "#fff",
+                            textTransform: "none",
+                            fontWeight: 900,
+                            border: "1px solid rgba(255,255,255,0.12)",
+                          }}
+                        >
+                          Read
+                        </Button>
+                        <Button
+                          size="small"
+                          onClick={() => void openDownload(issue)}
+                          disabled={loading || Boolean(unlockingId) || !canOpenIssue}
+                          sx={{
+                            bgcolor: gold,
+                            color: "#120d02",
+                            textTransform: "none",
+                            fontWeight: 900,
+                            "&:hover": { bgcolor: "#e2bb5a" },
+                          }}
+                        >
+                          Download
+                        </Button>
+                        {!canOpenIssue && (
+                          <Button
+                            size="small"
+                            onClick={() => handleCoverClick(issue)}
+                            sx={{
+                              color: "#fff",
+                              textTransform: "none",
+                              fontWeight: 800,
+                              border: "1px solid rgba(255,255,255,0.14)",
+                            }}
+                          >
+                            Pay to unlock
+                          </Button>
+                        )}
+                      </Stack>
                     </Stack>
                   </Paper>
                 );

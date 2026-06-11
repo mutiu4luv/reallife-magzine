@@ -57,6 +57,12 @@ import {
   PAST_EDITIONS_ENDPOINT,
   PHOTO_GALLERY_ENDPOINT,
   TESTIMONIES_ENDPOINT,
+  createMagazine,
+  deleteMagazine,
+  loadMagazineById,
+  loadMagazines,
+  type MagazineItem,
+  updateMagazine,
   loadCompendiumSubmissions,
   type CompendiumSubmission as CompendiumSubmissionType,
 } from "../services/contentApi";
@@ -80,6 +86,8 @@ import type { AuditLog, AuthUser, Permission } from "../services/authApi";
 
 const POST_ENDPOINT = `${API_BASE_URL}/api/posts`;
 const DELETED_POSTS_ENDPOINT = `${API_BASE_URL}/api/posts/deleted/list`;
+const MAGAZINES_ENDPOINT = `${API_BASE_URL}/api/magazines`;
+const DELETED_MAGAZINES_ENDPOINT = `${API_BASE_URL}/api/magazines/deleted/list`;
 const DELETED_NEWS_ENDPOINT = `${API_BASE_URL}/api/news/deleted/list`;
 const DELETED_EVENTS_ENDPOINT = `${API_BASE_URL}/api/events/deleted/list`;
 const DELETED_PAST_EDITIONS_ENDPOINT = `${API_BASE_URL}/api/past-editions/deleted/list`;
@@ -111,6 +119,7 @@ type Post = {
   type: PostType;
   desc: string;
   image: string;
+  coverImage?: string;
   images?: string[];
   downloadUrl?: string;
   isDeleted?: boolean;
@@ -191,6 +200,7 @@ type Feedback = {
 
 type PendingDelete =
   | { kind: "post"; item: Post }
+  | { kind: "magazine"; item: MagazineItem }
   | { kind: "news"; item: NewsItem }
   | { kind: "event"; item: UpcomingEvent }
   | { kind: "pastEdition"; item: PastEdition }
@@ -201,6 +211,7 @@ type PendingDelete =
 
 type PendingEdit =
   | { kind: "post"; item: Post }
+  | { kind: "magazine"; item: MagazineItem }
   | { kind: "news"; item: NewsItem }
   | { kind: "event"; item: UpcomingEvent }
   | { kind: "testimony"; item: Testimony }
@@ -636,6 +647,9 @@ const AdminScreen: React.FC = () => {
   const photoGalleryFormRef = useRef<HTMLFormElement>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [deletedPosts, setDeletedPosts] = useState<Post[]>([]);
+  const [magazineIssues, setMagazineIssues] = useState<MagazineItem[]>([]);
+  const [deletedMagazineIssues, setDeletedMagazineIssues] = useState<MagazineItem[]>([]);
+  const [magazinePageMeta, setMagazinePageMeta] = useState({ page: 1, limit: ADMIN_PAGE_SIZE, total: 0, hasMore: false });
   const [news, setNews] = useState<NewsItem[]>([]);
   const [deletedNews, setDeletedNews] = useState<NewsItem[]>([]);
   const [events, setEvents] = useState<UpcomingEvent[]>([]);
@@ -662,6 +676,7 @@ const AdminScreen: React.FC = () => {
   const [resolvingMagazineRequestId, setResolvingMagazineRequestId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingPost, setIsSavingPost] = useState(false);
+  const [isSavingMagazine, setIsSavingMagazine] = useState(false);
   const [isSavingNews, setIsSavingNews] = useState(false);
   const [isSavingEvent, setIsSavingEvent] = useState(false);
   const [isSavingPastEdition, setIsSavingPastEdition] = useState(false);
@@ -671,7 +686,8 @@ const AdminScreen: React.FC = () => {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [selectedBlogImageNames, setSelectedBlogImageNames] = useState("");
-  const [selectedBlogPdfName, setSelectedBlogPdfName] = useState("");
+  const [selectedMagazineImageNames, setSelectedMagazineImageNames] = useState("");
+  const [selectedMagazinePdfName, setSelectedMagazinePdfName] = useState("");
   const [selectedPastEditionImageNames, setSelectedPastEditionImageNames] = useState("");
   const [selectedTestimonyImageNames, setSelectedTestimonyImageNames] = useState("");
   const [selectedInterviewImageNames, setSelectedInterviewImageNames] = useState("");
@@ -700,11 +716,12 @@ const AdminScreen: React.FC = () => {
   const [postPage, setPostPage] = useState(1);
   const [newsPage, setNewsPage] = useState(1);
   const [eventPage, setEventPage] = useState(1);
+  const [magazinePage, setMagazinePage] = useState(1);
   const [activityPage, setActivityPage] = useState(1);
   const [selectedActivityLog, setSelectedActivityLog] = useState<AuditLog | null>(null);
 
   const activeEvents = useMemo(() => events.filter((event) => event.isActive).length, [events]);
-  const magazines = useMemo(() => posts.filter((post) => post.type === "Magazine").length, [posts]);
+  const magazines = useMemo(() => magazinePageMeta.total, [magazinePageMeta.total]);
   const books = useMemo(() => posts.filter((post) => post.type === "Book").length, [posts]);
   const filteredPosts = useMemo(
     () => filterByQuery(posts, postSearch, (post) => [post.title, post.desc, post.type, post.createdAt]),
@@ -775,6 +792,7 @@ const AdminScreen: React.FC = () => {
   const postPageCount = useMemo(() => getPageCount(filteredPosts.length), [filteredPosts.length]);
   const newsPageCount = useMemo(() => getPageCount(filteredNews.length), [filteredNews.length]);
   const eventPageCount = useMemo(() => getPageCount(filteredEvents.length), [filteredEvents.length]);
+  const magazinePageCount = useMemo(() => getPageCount(magazinePageMeta.total), [magazinePageMeta.total]);
   const activityPageCount = useMemo(() => getPageCount(filteredActivityLogs.length), [filteredActivityLogs.length]);
   const safePostPage = Math.min(postPage, postPageCount);
   const safeNewsPage = Math.min(newsPage, newsPageCount);
@@ -886,6 +904,8 @@ const AdminScreen: React.FC = () => {
     }
     const [
       postResult,
+      magazineResult,
+      deletedMagazineResult,
       eventResult,
       messageResult,
       compendiumResult,
@@ -908,6 +928,16 @@ const AdminScreen: React.FC = () => {
       auditLogResult,
     ] = await Promise.all([
       requestCollection<Post>([POST_ENDPOINT], "Unable to load blogs."),
+      loadMagazines(magazinePage, ADMIN_PAGE_SIZE)
+        .then((result) => ({ items: result.items, meta: result.meta, error: "" }))
+        .catch((error) => ({
+          items: [] as MagazineItem[],
+          meta: { page: magazinePage, limit: ADMIN_PAGE_SIZE, total: 0, hasMore: false },
+          error: error instanceof Error ? error.message : "Unable to load magazines.",
+        })),
+      isOwnerAdmin
+        ? requestCollection<MagazineItem>([DELETED_MAGAZINES_ENDPOINT], "Unable to load deleted magazines.")
+        : Promise.resolve({ items: [] as MagazineItem[], error: "" }),
       requestCollection<UpcomingEvent>(EVENT_ENDPOINTS, "Unable to load upcoming events."),
       isOwnerAdmin
         ? requestCollection<ContactMessage>(CONTACT_ENDPOINTS, "Unable to load contact messages.")
@@ -989,6 +1019,9 @@ const AdminScreen: React.FC = () => {
     ]);
 
     setPosts(postResult.items);
+    setMagazineIssues(magazineResult.items);
+    setMagazinePageMeta(magazineResult.meta);
+    setDeletedMagazineIssues(deletedMagazineResult.items);
     setNews(newsResult.items);
     setDeletedNews(deletedNewsResult.items);
     setEvents(eventResult.items);
@@ -1015,6 +1048,8 @@ const AdminScreen: React.FC = () => {
 
     const failedSections = [
       postResult.error && "blogs",
+      magazineResult.error && "magazines",
+      deletedMagazineResult.error && "deleted magazines",
       eventResult.error && "events",
       messageResult.error && "messages",
       compendiumResult.error && "commemorative submissions",
@@ -1045,7 +1080,7 @@ const AdminScreen: React.FC = () => {
     }
 
     setIsLoading(false);
-  }, [isOwnerAdmin]);
+  }, [isOwnerAdmin, magazinePage]);
 
   useEffect(() => {
     const loadTimer = window.setTimeout(() => {
@@ -1205,9 +1240,22 @@ const AdminScreen: React.FC = () => {
     setSelectedEditImagePreviews([]);
   };
 
-  const handleOpenEdit = (editItem: Exclude<PendingEdit, null>) => {
+  const handleOpenEdit = async (editItem: Exclude<PendingEdit, null>) => {
     clearEditImageState();
     setEditInterviewQaCount(editItem.kind === "interview" ? Math.max(editItem.item.qa.length, 1) : 1);
+    if (editItem.kind === "magazine" && editItem.item._id) {
+      try {
+        const magazine = await loadMagazineById(editItem.item._id);
+        setPendingEdit({
+          kind: "magazine",
+          item: magazine,
+        });
+        return;
+      } catch {
+        setFeedback({ severity: "error", message: "Unable to load this magazine issue." });
+      }
+    }
+
     setPendingEdit(editItem);
   };
 
@@ -1310,6 +1358,52 @@ const AdminScreen: React.FC = () => {
         clearEditImageState();
       } catch (error) {
         setFeedback({ severity: "error", message: error instanceof Error ? error.message : "Unable to update blog." });
+      } finally {
+        setIsUpdating(false);
+      }
+      return;
+    }
+
+    if (pendingEdit.kind === "magazine") {
+      const title = String(formData.get("title") || "").trim();
+      const description = String(formData.get("desc") || "").trim();
+      const downloadUrl = String(formData.get("downloadUrl") || "").trim();
+      const imageFiles = formData.getAll("images").filter(isUsableImageFile).slice(0, 1);
+      const pdfFiles = formData.getAll("pdfFile").filter(isUsablePdfFile).slice(0, 1);
+
+      if (!title || !description) {
+        setFeedback({ severity: "error", message: "Issue title and description are required." });
+        return;
+      }
+
+      if (downloadUrl && pdfFiles.length > 0) {
+        setFeedback({
+          severity: "error",
+          message: "Use either a secure download URL or an uploaded PDF file, not both.",
+        });
+        return;
+      }
+
+      updateFormData.set("title", title);
+      updateFormData.set("desc", description);
+      if (downloadUrl) {
+        updateFormData.set("downloadUrl", downloadUrl);
+      }
+      imageFiles.forEach((image) => updateFormData.append("images", image));
+      pdfFiles.forEach((pdfFile) => updateFormData.append("pdfFile", pdfFile));
+
+      setIsUpdating(true);
+      try {
+        const updatedMagazine = await updateMagazine(itemId, updateFormData);
+        setMagazineIssues((currentIssues) => currentIssues.map((issue) => (issue._id === itemId ? updatedMagazine : issue)));
+        setFeedback({ severity: "success", message: "Magazine issue updated successfully." });
+        setPendingEdit(null);
+        clearEditImageState();
+      } catch (error) {
+        setFeedback({
+          severity: "error",
+          message: error instanceof Error ? error.message : "Unable to update magazine issue.",
+        });
       } finally {
         setIsUpdating(false);
       }
@@ -1546,6 +1640,14 @@ const AdminScreen: React.FC = () => {
       return;
     }
 
+    if (pdfFiles.length > 0 && downloadUrl) {
+      setFeedback({
+        severity: "error",
+        message: "Use either the uploaded PDF or a secure download URL, not both.",
+      });
+      return;
+    }
+
     const largeImageNames = getLargeImageNames(imageFiles);
     if (largeImageNames.length > 0) {
       setFeedback({ severity: "error", message: buildLargeImageMessage(largeImageNames) });
@@ -1567,28 +1669,19 @@ const AdminScreen: React.FC = () => {
     const magazineFormData = new FormData();
     magazineFormData.set("title", title);
     magazineFormData.set("desc", desc);
-    magazineFormData.set("type", "Magazine");
     if (downloadUrl) {
       magazineFormData.set("downloadUrl", downloadUrl);
     }
     imageFiles.forEach((image) => magazineFormData.append("images", image));
     pdfFiles.forEach((pdfFile) => magazineFormData.append("pdfFile", pdfFile));
 
-    setIsSavingPost(true);
+    setIsSavingMagazine(true);
     try {
-      const createdPost = await requestJson<Post>(
-        [POST_ENDPOINT],
-        {
-          method: "POST",
-          body: magazineFormData,
-        },
-        "Unable to publish issue."
-      );
-
-      setPosts((currentPosts) => [createdPost, ...currentPosts]);
+      const createdMagazine = await createMagazine(magazineFormData);
+      setMagazineIssues((currentIssues) => [createdMagazine, ...currentIssues]);
       magazineFormRef.current?.reset();
-      setSelectedBlogImageNames("");
-      setSelectedBlogPdfName("");
+      setSelectedMagazineImageNames("");
+      setSelectedMagazinePdfName("");
       setFeedback({ severity: "success", message: "Magazine issue published successfully." });
     } catch (error) {
       setFeedback({
@@ -1596,7 +1689,7 @@ const AdminScreen: React.FC = () => {
         message: error instanceof Error ? error.message : "Unable to publish issue.",
       });
     } finally {
-      setIsSavingPost(false);
+      setIsSavingMagazine(false);
     }
   };
 
@@ -1962,6 +2055,74 @@ const AdminScreen: React.FC = () => {
       setFeedback({
         severity: "error",
         message: error instanceof Error ? error.message : "Unable to delete blog.",
+      });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleDeleteMagazine = async (issue: MagazineItem) => {
+    if (!issue._id) {
+      setFeedback({ severity: "error", message: "This issue cannot be deleted because it has no database id." });
+      return;
+    }
+
+    setDeletingId(issue._id);
+    try {
+      await deleteMagazine(issue._id);
+      setMagazineIssues((currentIssues) => currentIssues.filter((currentIssue) => currentIssue._id !== issue._id));
+      setDeletedMagazineIssues((currentIssues) => currentIssues.filter((currentIssue) => currentIssue._id !== issue._id));
+      setFeedback({ severity: "success", message: "Magazine issue deleted successfully." });
+      void loadAdminData();
+    } catch (error) {
+      setFeedback({
+        severity: "error",
+        message: error instanceof Error ? error.message : "Unable to delete magazine issue.",
+      });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleRestoreDeletedMagazine = async (issue: MagazineItem) => {
+    if (!issue._id) return;
+
+    setDeletingId(issue._id);
+    try {
+      const response = await requestJson<{ message: string; magazine: Post }>(
+        [`${MAGAZINES_ENDPOINT}/${issue._id}/restore`],
+        { method: "PATCH" },
+        "Unable to restore magazine."
+      );
+      setDeletedMagazineIssues((currentIssues) => currentIssues.filter((currentIssue) => currentIssue._id !== issue._id));
+      setMagazineIssues((currentIssues) => [response.magazine, ...currentIssues]);
+      setFeedback({ severity: "success", message: "Magazine issue restored successfully." });
+    } catch (error) {
+      setFeedback({
+        severity: "error",
+        message: error instanceof Error ? error.message : "Unable to restore magazine issue.",
+      });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handlePermanentDeleteMagazine = async (issue: MagazineItem) => {
+    if (!issue._id) return;
+
+    setDeletingId(issue._id);
+    try {
+      await requestJson<{ message: string }>(
+        [`${MAGAZINES_ENDPOINT}/${issue._id}/permanent`],
+        { method: "DELETE" },
+        "Unable to permanently delete magazine."
+      );
+      setDeletedMagazineIssues((currentIssues) => currentIssues.filter((currentIssue) => currentIssue._id !== issue._id));
+      setFeedback({ severity: "success", message: "Magazine issue permanently deleted." });
+    } catch (error) {
+      setFeedback({
+        severity: "error",
+        message: error instanceof Error ? error.message : "Unable to permanently delete magazine issue.",
       });
     } finally {
       setDeletingId(null);
@@ -2356,6 +2517,11 @@ const AdminScreen: React.FC = () => {
       return;
     }
 
+    if (itemToDelete.kind === "magazine") {
+      await handleDeleteMagazine(itemToDelete.item);
+      return;
+    }
+
     if (itemToDelete.kind === "news") {
       await handleDeleteNews(itemToDelete.item);
       return;
@@ -2381,7 +2547,9 @@ const AdminScreen: React.FC = () => {
       return;
     }
 
-    await handleDeleteEvent(itemToDelete.item);
+    if (itemToDelete.kind === "event") {
+      await handleDeleteEvent(itemToDelete.item);
+    }
   };
 
   const handleDeleteNews = async (newsItem: NewsItem) => {
@@ -2593,18 +2761,40 @@ const AdminScreen: React.FC = () => {
     }
   };
 
-  const handleResolveMagazineRequest = async (requestUser: AuthUser, status: "approved" | "rejected") => {
-    setResolvingMagazineRequestId(requestUser._id);
+  const handleResolveMagazineRequest = async (
+    requestUser: AuthUser,
+    magazineId: string,
+    status: "approved" | "rejected"
+  ) => {
+    setResolvingMagazineRequestId(`${requestUser._id}-${magazineId}`);
     try {
-      await resolveMagazineRequest(requestUser._id, status);
-      setMagazineRequests((currentRequests) => currentRequests.filter((currentUser) => currentUser._id !== requestUser._id));
+      await resolveMagazineRequest(requestUser._id, magazineId, status);
+      setMagazineRequests((currentRequests) =>
+        currentRequests
+          .map((currentUser) => {
+            if (currentUser._id !== requestUser._id) {
+              return currentUser;
+            }
+
+            const nextPurchases = (currentUser.magazinePurchases || []).filter(
+              (purchase) => purchase.magazineId !== magazineId || purchase.status === status
+            );
+
+            return {
+              ...currentUser,
+              magazinePurchases: nextPurchases.filter((purchase) => purchase.status === "pending"),
+            };
+          })
+          .filter((currentUser) => (currentUser.magazinePurchases || []).length > 0)
+      );
       setFeedback({
         severity: "success",
         message:
           status === "approved"
-            ? `${requestUser.name}'s magazine access is now approved.`
+            ? `${requestUser.name}'s magazine payment is now approved.`
             : `${requestUser.name}'s magazine payment was rejected.`,
       });
+      void loadAdminData();
     } catch (error) {
       setFeedback({
         severity: "error",
@@ -3062,169 +3252,364 @@ const AdminScreen: React.FC = () => {
             )}
 
             {activeView === "magazines" && can("posts:create") && (
-              <Paper
-                ref={magazineFormRef}
-                component="form"
-                onSubmit={handleMagazineSubmit}
-                elevation={0}
-                sx={{ p: { xs: 2, md: 3 }, border: "1px solid #e6e8ec", borderRadius: 2 }}
-              >
-                <Stack spacing={2.2}>
-                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
-                      <LibraryBooks sx={{ color: "#caa64a" }} />
+              <Stack spacing={2.5}>
+                <Paper
+                  ref={magazineFormRef}
+                  component="form"
+                  onSubmit={handleMagazineSubmit}
+                  elevation={0}
+                  sx={{ p: { xs: 2, md: 3 }, border: "1px solid #e6e8ec", borderRadius: 2 }}
+                >
+                  <Stack spacing={2.2}>
+                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
+                        <LibraryBooks sx={{ color: "#caa64a" }} />
+                        <Typography variant="h6" sx={{ fontWeight: 900 }}>
+                          Publish Issue
+                        </Typography>
+                      </Box>
+                      <Chip
+                        size="small"
+                        label="Dedicated magazine workflow"
+                        sx={{ bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 800 }}
+                      />
+                    </Box>
+
+                    <Divider />
+
+                    <TextField required label="Issue title" name="title" fullWidth />
+                    <TextField
+                      label="Secure download URL"
+                      name="downloadUrl"
+                      fullWidth
+                      helperText="Optional if you upload the PDF directly. Approved readers will open this link or the uploaded file."
+                    />
+                    <TextField required multiline minRows={5} label="Issue description" name="desc" fullWidth />
+
+                    <Box
+                      sx={{
+                        display: "grid",
+                        gridTemplateColumns: { xs: "1fr", md: "1.05fr 0.95fr" },
+                        gap: 2,
+                        alignItems: "start",
+                      }}
+                    >
+                      <Stack spacing={2} sx={{ p: 2, borderRadius: 2, bgcolor: "#faf7ef", border: "1px solid #efe2bc" }}>
+                        <Box>
+                          <Button
+                            component="label"
+                            variant="outlined"
+                            startIcon={<CloudUpload />}
+                            sx={{
+                              borderColor: "#caa64a",
+                              color: "#6f5517",
+                              textTransform: "none",
+                              fontWeight: 900,
+                              "&:hover": { borderColor: "#caa64a", bgcolor: "#f7edd0" },
+                            }}
+                          >
+                            Select cover page
+                            <input
+                              hidden
+                              required
+                              type="file"
+                              name="images"
+                              accept="image/*"
+                              onChange={(changeEvent) => {
+                                const selectedFile = Array.from(changeEvent.target.files || [])[0];
+                                setSelectedMagazineImageNames(selectedFile?.name || "");
+                              }}
+                            />
+                          </Button>
+                          <Typography sx={{ color: "#667085", fontSize: 13, mt: 1 }}>
+                            {selectedMagazineImageNames || "No cover page selected"}
+                          </Typography>
+                        </Box>
+
+                        <Box>
+                          <Button
+                            component="label"
+                            variant="outlined"
+                            startIcon={<CloudUpload />}
+                            sx={{
+                              borderColor: "#caa64a",
+                              color: "#6f5517",
+                              textTransform: "none",
+                              fontWeight: 900,
+                              "&:hover": { borderColor: "#caa64a", bgcolor: "#f7edd0" },
+                            }}
+                          >
+                            Upload magazine PDF
+                            <input
+                              hidden
+                              type="file"
+                              name="pdfFile"
+                              accept="application/pdf,.pdf"
+                              onChange={(changeEvent) => {
+                                const selectedFile = Array.from(changeEvent.target.files || [])[0];
+                                setSelectedMagazinePdfName(selectedFile?.name || "");
+                              }}
+                            />
+                          </Button>
+                          <Typography sx={{ color: "#667085", fontSize: 13, mt: 1 }}>
+                            {selectedMagazinePdfName || "No PDF selected"}
+                          </Typography>
+                        </Box>
+
+                        <Typography sx={{ color: "#6f5517", fontSize: 13, lineHeight: 1.7 }}>
+                          Each issue should ship with one public cover page and one full PDF. The cover appears in the
+                          newsstand; the PDF is unlocked only for the specific paid issue.
+                        </Typography>
+                      </Stack>
+
+                      <Paper
+                        elevation={0}
+                        sx={{
+                          p: 2,
+                          borderRadius: 2,
+                          bgcolor: "#111318",
+                          color: "#fff",
+                          border: "1px solid #1f2430",
+                        }}
+                      >
+                        <Stack spacing={1.5}>
+                          <Typography sx={{ fontWeight: 900, fontSize: 16 }}>Publishing checklist</Typography>
+                          {[
+                            "Use one strong cover image that represents the issue.",
+                            "Attach the full PDF so approved readers can download immediately.",
+                            "Keep the description short, editorial, and premium.",
+                            "Confirm the secure download URL if you are not uploading the PDF directly.",
+                          ].map((item) => (
+                            <Box key={item} sx={{ display: "flex", gap: 1.1, alignItems: "flex-start" }}>
+                              <Box
+                                sx={{
+                                  mt: "7px",
+                                  width: 8,
+                                  height: 8,
+                                  borderRadius: "50%",
+                                  bgcolor: "#caa64a",
+                                  flexShrink: 0,
+                                }}
+                              />
+                              <Typography sx={{ color: "#d7dce5", fontSize: 13.5, lineHeight: 1.7 }}>{item}</Typography>
+                            </Box>
+                          ))}
+                        </Stack>
+                      </Paper>
+                    </Box>
+
+                    <Button
+                      type="submit"
+                      disabled={isSavingMagazine}
+                      startIcon={<Save />}
+                      sx={{
+                        alignSelf: "flex-start",
+                        bgcolor: "#111318",
+                        color: "#fff",
+                        textTransform: "none",
+                        fontWeight: 900,
+                        px: 3,
+                        "&:hover": { bgcolor: "#2a2f38" },
+                      }}
+                    >
+                      {isSavingMagazine ? "Publishing issue..." : "Publish issue"}
+                    </Button>
+                  </Stack>
+                </Paper>
+
+                <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid #e6e8ec", borderRadius: 2 }}>
+                  <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2, mb: 2, flexDirection: { xs: "column", sm: "row" }, alignItems: { xs: "stretch", sm: "center" } }}>
+                    <Box>
                       <Typography variant="h6" sx={{ fontWeight: 900 }}>
-                        Publish Magazine Issue
+                        Published issues
+                      </Typography>
+                      <Typography sx={{ color: "#667085", mt: 0.5 }}>
+                        Review, edit, delete, or restore magazine issues from the dedicated magazine endpoint.
                       </Typography>
                     </Box>
                     <Chip
                       size="small"
-                      label="Issue builder"
-                      sx={{ bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 800 }}
+                      label={`${magazinePageMeta.total} total`}
+                      sx={{ bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 900, alignSelf: "flex-start" }}
                     />
                   </Box>
 
-                  <Divider />
-
-                  <TextField required label="Issue title" name="title" fullWidth />
-                  <TextField
-                    label="Secure download URL"
-                    name="downloadUrl"
-                    fullWidth
-                    helperText="Optional if you upload the PDF directly. Approved readers will open this link or the uploaded file."
-                  />
-                  <TextField required multiline minRows={5} label="Issue description" name="desc" fullWidth />
-
-                  <Box
-                    sx={{
-                      display: "grid",
-                      gridTemplateColumns: { xs: "1fr", md: "1.05fr 0.95fr" },
-                      gap: 2,
-                      alignItems: "start",
-                    }}
-                  >
-                    <Stack spacing={2} sx={{ p: 2, borderRadius: 2, bgcolor: "#faf7ef", border: "1px solid #efe2bc" }}>
-                      <Box>
-                        <Button
-                          component="label"
-                          variant="outlined"
-                          startIcon={<CloudUpload />}
-                          sx={{
-                            borderColor: "#caa64a",
-                            color: "#6f5517",
-                            textTransform: "none",
-                            fontWeight: 900,
-                            "&:hover": { borderColor: "#caa64a", bgcolor: "#f7edd0" },
-                          }}
-                        >
-                          Select cover page
-                          <input
-                            hidden
-                            required
-                            type="file"
-                            name="images"
-                            accept="image/*"
-                            onChange={(changeEvent) => {
-                              const selectedFile = Array.from(changeEvent.target.files || [])[0];
-                              setSelectedBlogImageNames(selectedFile?.name || "");
+                  <Stack spacing={2}>
+                    {magazineIssues.length ? (
+                      <Box
+                        sx={{
+                          display: "grid",
+                          gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(3, minmax(0, 1fr))" },
+                          gap: 2,
+                        }}
+                      >
+                        {magazineIssues.map((issue) => (
+                          <Paper
+                            key={issue._id}
+                            elevation={0}
+                            sx={{
+                              overflow: "hidden",
+                              borderRadius: 2,
+                              border: "1px solid #edf0f2",
+                              bgcolor: "#fff",
+                              display: "grid",
                             }}
-                          />
-                        </Button>
-                        <Typography sx={{ color: "#667085", fontSize: 13, mt: 1 }}>
-                          {selectedBlogImageNames || "No cover page selected"}
-                        </Typography>
+                          >
+                            <Box
+                              component="img"
+                              src={issue.coverImage || issue.image}
+                              alt={issue.title}
+                              sx={{ width: "100%", aspectRatio: "4 / 5", objectFit: "cover", display: "block" }}
+                            />
+                            <Stack spacing={1.1} sx={{ p: 2 }}>
+                              <Typography sx={{ fontWeight: 900, fontSize: 18, color: "#171a20" }}>{issue.title}</Typography>
+                              <Typography sx={{ color: "#667085", fontSize: 13.5, lineHeight: 1.7 }} noWrap>
+                                {issue.desc}
+                              </Typography>
+                              <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
+                                <Button
+                                  onClick={() => void handleOpenEdit({ kind: "magazine", item: issue })}
+                                  startIcon={<Edit />}
+                                  size="small"
+                                  sx={{
+                                    bgcolor: "#111318",
+                                    color: "#fff",
+                                    textTransform: "none",
+                                    fontWeight: 900,
+                                  }}
+                                >
+                                  Edit
+                                </Button>
+                                <Button
+                                  onClick={() => void handleDeleteMagazine(issue)}
+                                  disabled={deletingId === issue._id}
+                                  startIcon={<Delete />}
+                                  size="small"
+                                  sx={{
+                                    color: "#b42318",
+                                    border: "1px solid #fda29b",
+                                    textTransform: "none",
+                                    fontWeight: 900,
+                                  }}
+                                >
+                                  Delete
+                                </Button>
+                              </Stack>
+                            </Stack>
+                          </Paper>
+                        ))}
                       </Box>
+                    ) : (
+                      <Typography sx={{ color: "#667085" }}>No magazine issues were returned from the backend yet.</Typography>
+                    )}
 
-                      <Box>
-                        <Button
-                          component="label"
-                          variant="outlined"
-                          startIcon={<CloudUpload />}
-                          sx={{
-                            borderColor: "#caa64a",
-                            color: "#6f5517",
-                            textTransform: "none",
-                            fontWeight: 900,
-                            "&:hover": { borderColor: "#caa64a", bgcolor: "#f7edd0" },
-                          }}
-                        >
-                          Upload magazine PDF
-                          <input
-                            hidden
-                            type="file"
-                            name="pdfFile"
-                            accept="application/pdf,.pdf"
-                            onChange={(changeEvent) => {
-                              const selectedFile = Array.from(changeEvent.target.files || [])[0];
-                              setSelectedBlogPdfName(selectedFile?.name || "");
-                            }}
-                          />
-                        </Button>
-                        <Typography sx={{ color: "#667085", fontSize: 13, mt: 1 }}>
-                          {selectedBlogPdfName || "No PDF selected"}
-                        </Typography>
-                      </Box>
-
-                      <Typography sx={{ color: "#6f5517", fontSize: 13, lineHeight: 1.7 }}>
-                        Magazine issues should ship with one public cover page and one full PDF. The cover appears in
-                        the archive; the PDF is unlocked only for approved readers.
-                      </Typography>
-                    </Stack>
-
-                    <Paper
-                      elevation={0}
+                    <Box
                       sx={{
+                        display: "flex",
+                        flexDirection: "row",
+                        flexWrap: "wrap",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: 1.5,
                         p: 2,
                         borderRadius: 2,
-                        bgcolor: "#111318",
-                        color: "#fff",
-                        border: "1px solid #1f2430",
+                        bgcolor: "#fafafa",
+                        border: "1px solid #edf0f2",
                       }}
                     >
-                      <Stack spacing={1.5}>
-                        <Typography sx={{ fontWeight: 900, fontSize: 16 }}>Publishing checklist</Typography>
-                        {[
-                          "Use one strong cover image that represents the issue.",
-                          "Attach the full PDF so approved readers can download immediately.",
-                          "Keep the description short, editorial, and premium.",
-                          "Confirm the secure download URL if you are not uploading the PDF directly.",
-                        ].map((item) => (
-                          <Box key={item} sx={{ display: "flex", gap: 1.1, alignItems: "flex-start" }}>
-                            <Box
-                              sx={{
-                                mt: "7px",
-                                width: 8,
-                                height: 8,
-                                borderRadius: "50%",
-                                bgcolor: "#caa64a",
-                                flexShrink: 0,
-                              }}
-                            />
-                            <Typography sx={{ color: "#d7dce5", fontSize: 13.5, lineHeight: 1.7 }}>{item}</Typography>
-                          </Box>
-                        ))}
-                      </Stack>
-                    </Paper>
-                  </Box>
+                      <Button
+                        onClick={() => setMagazinePage((page) => Math.max(1, page - 1))}
+                        disabled={magazinePage === 1 || isLoading}
+                        sx={{ bgcolor: "rgba(17,19,24,0.06)", color: "#111318", textTransform: "none", fontWeight: 800 }}
+                      >
+                        Previous
+                      </Button>
+                      <Typography sx={{ color: "#667085", fontWeight: 700 }}>
+                        Page {magazinePage} of {magazinePageCount} · {magazinePageMeta.total} magazines
+                      </Typography>
+                      <Button
+                        onClick={() => setMagazinePage((page) => page + 1)}
+                        disabled={!magazinePageMeta.hasMore || isLoading}
+                        sx={{ bgcolor: "#caa64a", color: "#120d02", textTransform: "none", fontWeight: 900 }}
+                      >
+                        Next
+                      </Button>
+                    </Box>
+                  </Stack>
+                </Paper>
 
-                  <Button
-                    type="submit"
-                    disabled={isSavingPost}
-                    startIcon={<Save />}
-                    sx={{
-                      alignSelf: "flex-start",
-                      bgcolor: "#111318",
-                      color: "#fff",
-                      textTransform: "none",
-                      fontWeight: 900,
-                      px: 3,
-                      "&:hover": { bgcolor: "#2a2f38" },
-                    }}
-                  >
-                    {isSavingPost ? "Publishing issue..." : "Publish issue"}
-                  </Button>
-                </Stack>
-              </Paper>
+                {isOwnerAdmin && (
+                  <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid #e6e8ec", borderRadius: 2 }}>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2, mb: 2 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 900 }}>
+                        Deleted issues
+                      </Typography>
+                      <Chip
+                        size="small"
+                        label={`${deletedMagazineIssues.length} archived`}
+                        sx={{ bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 900 }}
+                      />
+                    </Box>
+                    <Stack spacing={1.5}>
+                      {deletedMagazineIssues.map((issue) => (
+                        <Box
+                          key={issue._id}
+                          sx={{
+                            display: "grid",
+                            gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) auto" },
+                            gap: 1.5,
+                            alignItems: "center",
+                            border: "1px solid #edf0f2",
+                            borderRadius: 1.5,
+                            p: { xs: 1.5, md: 2 },
+                            bgcolor: "#fff",
+                          }}
+                        >
+                          <Box sx={{ minWidth: 0 }}>
+                            <Typography sx={{ fontWeight: 900, color: "#171a20", overflowWrap: "anywhere" }}>
+                              {issue.title}
+                            </Typography>
+                            <Typography sx={{ color: "#667085", fontSize: 13, overflowWrap: "anywhere" }}>
+                              {issue.desc}
+                            </Typography>
+                          </Box>
+                          <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                            <Button
+                              onClick={() => void handleRestoreDeletedMagazine(issue)}
+                              disabled={deletingId === issue._id}
+                              startIcon={<Add />}
+                              sx={{
+                                bgcolor: "#12372A",
+                                color: "#fff",
+                                textTransform: "none",
+                                fontWeight: 900,
+                              }}
+                            >
+                              Restore
+                            </Button>
+                            <Button
+                              onClick={() => void handlePermanentDeleteMagazine(issue)}
+                              disabled={deletingId === issue._id}
+                              startIcon={<Delete />}
+                              sx={{
+                                color: "#b42318",
+                                border: "1px solid #fda29b",
+                                textTransform: "none",
+                                fontWeight: 900,
+                              }}
+                            >
+                              Delete forever
+                            </Button>
+                          </Stack>
+                        </Box>
+                      ))}
+                      {!deletedMagazineIssues.length && !isLoading && (
+                        <Typography sx={{ color: "#667085" }}>No deleted magazine issues to restore.</Typography>
+                      )}
+                    </Stack>
+                  </Paper>
+                )}
+              </Stack>
             )}
 
             {activeView === "news" && can("news:create") && (
@@ -4081,7 +4466,7 @@ const AdminScreen: React.FC = () => {
                       Share
                     </Button>
                     {can("posts:update") && <Button
-                      onClick={() => handleOpenEdit({ kind: "post", item: post })}
+                      onClick={() => void handleOpenEdit({ kind: "post", item: post })}
                       startIcon={<Edit />}
                       size="small"
                       sx={{
@@ -4316,7 +4701,7 @@ const AdminScreen: React.FC = () => {
                       Share
                     </Button>
                     {can("news:update") && <Button
-                      onClick={() => handleOpenEdit({ kind: "news", item: newsItem })}
+                      onClick={() => void handleOpenEdit({ kind: "news", item: newsItem })}
                       startIcon={<Edit />}
                       size="small"
                       sx={{
@@ -4552,7 +4937,7 @@ const AdminScreen: React.FC = () => {
                       </IconButton>
                       {can("events:update") && <IconButton
                         aria-label={`Edit ${event.title}`}
-                        onClick={() => handleOpenEdit({ kind: "event", item: event })}
+                        onClick={() => void handleOpenEdit({ kind: "event", item: event })}
                         sx={{
                           color: "#175cd3",
                           border: "1px solid #b2ccff",
@@ -4783,7 +5168,7 @@ const AdminScreen: React.FC = () => {
                       sx={{ gridColumn: { xs: "1 / -1", sm: "auto" }, justifySelf: { xs: "stretch", sm: "end" } }}
                     >
                       {can("testimonies:update") && <Button
-                        onClick={() => handleOpenEdit({ kind: "testimony", item: testimony })}
+                        onClick={() => void handleOpenEdit({ kind: "testimony", item: testimony })}
                         startIcon={<Edit />}
                         size="small"
                         sx={{
@@ -4912,7 +5297,7 @@ const AdminScreen: React.FC = () => {
                       sx={{ gridColumn: { xs: "1 / -1", sm: "auto" }, justifySelf: { xs: "stretch", sm: "end" } }}
                     >
                       {can("interviews:update") && <Button
-                        onClick={() => handleOpenEdit({ kind: "interview", item: interview })}
+                        onClick={() => void handleOpenEdit({ kind: "interview", item: interview })}
                         startIcon={<Edit />}
                         size="small"
                         sx={{
@@ -5288,40 +5673,82 @@ const AdminScreen: React.FC = () => {
             <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid #e6e8ec", borderRadius: 2 }}>
               <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2, mb: 2 }}>
                 <Typography variant="h6" sx={{ fontWeight: 900 }}>Pending Magazine Payments</Typography>
-                <Chip size="small" label={`${magazineRequests.length} pending`} sx={{ bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 900 }} />
+                <Chip
+                  size="small"
+                  label={`${magazineRequests.reduce((total, requestUser) => total + (requestUser.magazinePurchases?.length || 0), 0)} pending`}
+                  sx={{ bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 900 }}
+                />
               </Box>
               <Stack spacing={1.5}>
-                {magazineRequests.map((requestUser) => (
-                  <Box key={requestUser._id} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) auto" }, gap: 1.5, p: 2, border: "1px solid #edf0f2", borderRadius: 1.5 }}>
-                    <Box>
-                      <Typography sx={{ fontWeight: 900 }}>{requestUser.name}</Typography>
-                      <Typography sx={{ color: "#667085", fontSize: 13, overflowWrap: "anywhere" }}>{requestUser.email} - {requestUser.phonenumber}</Typography>
-                      <Typography sx={{ color: "#667085", fontSize: 13, mt: 0.75 }}>
-                        Reference: {requestUser.magazineAccessReference || "No payment reference provided"}
-                      </Typography>
-                      <Typography sx={{ color: "#667085", fontSize: 13, mt: 0.5 }}>
-                        Status: {requestUser.magazineAccessStatus}
-                      </Typography>
+                {magazineRequests.flatMap((requestUser) =>
+                  (requestUser.magazinePurchases || []).map((purchase) => (
+                    <Box
+                      key={`${requestUser._id}-${purchase.magazineId}`}
+                      sx={{
+                        display: "grid",
+                        gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) auto" },
+                        gap: 1.75,
+                        p: { xs: 2, md: 2.25 },
+                        border: "1px solid #f5d97b",
+                        borderRadius: 2,
+                        bgcolor: "#fffaf0",
+                        boxShadow: "0 10px 24px rgba(201,162,74,0.12)",
+                      }}
+                    >
+                      <Box>
+                        <Stack spacing={1.1}>
+                          <Chip
+                            size="small"
+                            label="Awaiting admin approval"
+                            sx={{ alignSelf: "flex-start", bgcolor: "#f7edd0", color: "#6f5517", fontWeight: 900 }}
+                          />
+                          <Box>
+                            <Typography sx={{ fontWeight: 950, fontSize: 18, color: "#171a20" }}>
+                              {requestUser.name}
+                            </Typography>
+                            <Typography sx={{ color: "#667085", fontSize: 13, overflowWrap: "anywhere" }}>
+                              {requestUser.email} • {requestUser.phonenumber}
+                            </Typography>
+                          </Box>
+                          <Typography sx={{ color: "#171a20", fontSize: 14, fontWeight: 900 }}>
+                            Magazine: {purchase.magazineTitle || purchase.magazineId}
+                          </Typography>
+                          <Typography sx={{ color: "#667085", fontSize: 13 }}>
+                            Reference: {purchase.reference || "No payment reference provided"}
+                          </Typography>
+                          <Typography sx={{ color: "#667085", fontSize: 13 }}>
+                            Requested at: {purchase.requestedAt ? formatDateTime(purchase.requestedAt) : "Not recorded"}
+                          </Typography>
+                          <Typography sx={{ color: "#b54708", fontSize: 13, fontWeight: 800 }}>
+                            Status: {purchase.status}
+                          </Typography>
+                        </Stack>
+                      </Box>
+                      <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                        <Button
+                          onClick={() => void handleResolveMagazineRequest(requestUser, purchase.magazineId, "approved")}
+                          disabled={resolvingMagazineRequestId === `${requestUser._id}-${purchase.magazineId}`}
+                          sx={{ bgcolor: "#12372A", color: "#fff", textTransform: "none", fontWeight: 900 }}
+                        >
+                          Approve
+                        </Button>
+                        <Button
+                          onClick={() => void handleResolveMagazineRequest(requestUser, purchase.magazineId, "rejected")}
+                          disabled={resolvingMagazineRequestId === `${requestUser._id}-${purchase.magazineId}`}
+                          sx={{ color: "#b42318", border: "1px solid #fda29b", textTransform: "none", fontWeight: 900 }}
+                        >
+                          Reject
+                        </Button>
+                      </Stack>
                     </Box>
-                    <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-                      <Button
-                        onClick={() => void handleResolveMagazineRequest(requestUser, "approved")}
-                        disabled={resolvingMagazineRequestId === requestUser._id}
-                        sx={{ bgcolor: "#12372A", color: "#fff", textTransform: "none", fontWeight: 900 }}
-                      >
-                        Approve
-                      </Button>
-                      <Button
-                        onClick={() => void handleResolveMagazineRequest(requestUser, "rejected")}
-                        disabled={resolvingMagazineRequestId === requestUser._id}
-                        sx={{ color: "#b42318", border: "1px solid #fda29b", textTransform: "none", fontWeight: 900 }}
-                      >
-                        Reject
-                      </Button>
-                    </Stack>
-                  </Box>
-                ))}
+                  ))
+                )}
                 {!magazineRequests.length && !isLoading && <Typography sx={{ color: "#667085" }}>No pending magazine payments.</Typography>}
+                {!magazineRequests.length && !isLoading && (
+                  <Alert severity="info" variant="outlined" sx={{ mt: 1.5, borderColor: "#f5d97b", bgcolor: "#fffaf0" }}>
+                    When a reader submits magazine payment proof, it appears here as <strong>Awaiting admin approval</strong>.
+                  </Alert>
+                )}
               </Stack>
             </Paper>
             )}
@@ -5644,13 +6071,19 @@ const AdminScreen: React.FC = () => {
       <Dialog open={Boolean(pendingEdit)} onClose={handleCloseEdit} fullWidth maxWidth="sm">
         <Box
           component="form"
-          key={pendingEdit ? `${pendingEdit.kind}-${pendingEdit.kind === "event" ? pendingEdit.item._id || pendingEdit.item.id : pendingEdit.item._id}` : "edit"}
+          key={
+            pendingEdit
+              ? `${pendingEdit.kind}-${pendingEdit.kind === "event" ? pendingEdit.item._id || pendingEdit.item.id : pendingEdit.item._id}`
+              : "edit"
+          }
           onSubmit={handleEditSubmit}
         >
           <DialogTitle sx={{ fontWeight: 900 }}>
             Edit{" "}
             {pendingEdit?.kind === "post"
               ? "blog"
+              : pendingEdit?.kind === "magazine"
+                ? "magazine issue"
               : pendingEdit?.kind === "news"
                 ? "news"
                 : pendingEdit?.kind === "event"
@@ -5663,6 +6096,19 @@ const AdminScreen: React.FC = () => {
             <Stack spacing={2.2} sx={{ pt: 1 }}>
               {(pendingEdit?.kind === "post" || pendingEdit?.kind === "news" || pendingEdit?.kind === "event") && (
                 <TextField required label="Title" name="title" fullWidth defaultValue={pendingEdit.item.title || ""} />
+              )}
+
+              {pendingEdit?.kind === "magazine" && (
+                <>
+                  <TextField required label="Issue title" name="title" fullWidth defaultValue={pendingEdit.item.title || ""} />
+                  <TextField
+                    label="Secure download URL"
+                    name="downloadUrl"
+                    fullWidth
+                    defaultValue={pendingEdit.item.downloadUrl || ""}
+                    helperText="Optional if you upload the PDF directly. Use only one source of download access."
+                  />
+                </>
               )}
 
               {pendingEdit?.kind === "post" && (
@@ -5697,22 +6143,79 @@ const AdminScreen: React.FC = () => {
                 </>
               )}
 
-              {(pendingEdit?.kind === "post" || pendingEdit?.kind === "news" || pendingEdit?.kind === "event") && (
+              {(pendingEdit?.kind === "post" || pendingEdit?.kind === "news" || pendingEdit?.kind === "event" || pendingEdit?.kind === "magazine") && (
                 <TextField
                   required
                   multiline
                   minRows={4}
-                  label="Description"
-                  name={pendingEdit.kind === "post" ? "desc" : "description"}
+                  label={pendingEdit.kind === "magazine" ? "Issue description" : "Description"}
+                  name={pendingEdit.kind === "post" || pendingEdit.kind === "magazine" ? "desc" : "description"}
                   fullWidth
                   defaultValue={
-                    pendingEdit.kind === "post"
+                    pendingEdit.kind === "post" || pendingEdit.kind === "magazine"
                       ? pendingEdit.item.desc
                       : pendingEdit.kind === "news"
                         ? pendingEdit.item.description
                         : pendingEdit.item.description || ""
                   }
                 />
+              )}
+
+              {pendingEdit?.kind === "magazine" && (
+                <Box>
+                  <Button
+                    component="label"
+                    variant="outlined"
+                    startIcon={<CloudUpload />}
+                    sx={{
+                      borderColor: "#caa64a",
+                      color: "#6f5517",
+                      textTransform: "none",
+                      fontWeight: 900,
+                      "&:hover": { borderColor: "#caa64a", bgcolor: "#f7edd0" },
+                    }}
+                  >
+                    Replace cover page
+                    <input hidden type="file" name="images" accept="image/*" onChange={handleEditImagesChange} />
+                  </Button>
+                  <Typography sx={{ color: "#667085", fontSize: 13, mt: 1 }}>
+                    {selectedEditImageNames || "Leave empty to keep current cover page."}
+                  </Typography>
+                  <Box
+                    sx={{
+                      mt: 1.5,
+                      width: "100%",
+                      maxWidth: 240,
+                      aspectRatio: "4 / 5",
+                      overflow: "hidden",
+                      borderRadius: 1.5,
+                      border: "1px solid #edf0f2",
+                    }}
+                  >
+                    <Box
+                      component="img"
+                      src={selectedEditImagePreviews[0] || pendingEdit.item.coverImage || pendingEdit.item.image}
+                      alt={pendingEdit.item.title}
+                      sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                    />
+                  </Box>
+                  <Button
+                    component="label"
+                    variant="outlined"
+                    startIcon={<CloudUpload />}
+                    sx={{
+                      mt: 2,
+                      borderColor: "#caa64a",
+                      color: "#6f5517",
+                      textTransform: "none",
+                      fontWeight: 900,
+                      "&:hover": { borderColor: "#caa64a", bgcolor: "#f7edd0" },
+                    }}
+                  >
+                    Replace PDF file
+                    <input hidden type="file" name="pdfFile" accept="application/pdf,.pdf" />
+                  </Button>
+                </Box>
               )}
 
               {pendingEdit?.kind === "testimony" && (
