@@ -33,7 +33,7 @@ const Navbar: React.FC = () => {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
 
   const isActiveLink = (path: string) => {
     if (path === "/") {
@@ -53,6 +53,16 @@ const Navbar: React.FC = () => {
     }
 
     return "/dashboard";
+  };
+
+  const handleAuthAction = async () => {
+    if (!user) {
+      navigate("/login");
+      return;
+    }
+
+    await logout();
+    navigate("/");
   };
 
   return (
@@ -113,8 +123,24 @@ const Navbar: React.FC = () => {
                 </Button>
               );
             })}
+            {user && (
+              <Button
+                onClick={() => navigate(getUserDestination())}
+                sx={{
+                  color: "#fff",
+                  border: "1px solid rgba(255,255,255,0.18)",
+                  fontWeight: 800,
+                  textTransform: "none",
+                  px: 2.2,
+                  ml: 1,
+                  "&:hover": { bgcolor: "rgba(255,255,255,0.06)" },
+                }}
+              >
+                Dashboard
+              </Button>
+            )}
             <Button
-              onClick={() => navigate(getUserDestination())}
+              onClick={() => void handleAuthAction()}
               sx={{
                 bgcolor: "#FFD700",
                 color: "#000",
@@ -125,7 +151,7 @@ const Navbar: React.FC = () => {
                 "&:hover": { bgcolor: "#f6c800" },
               }}
             >
-              {user ? "Dashboard" : "Login"}
+              {user ? "Logout" : "Login"}
             </Button>
           </Box>
 
@@ -188,11 +214,38 @@ const Navbar: React.FC = () => {
                 </ListItem>
               );
             })}
+            {user && (
+              <ListItem disablePadding sx={{ mt: 1 }}>
+                <ListItemButton
+                  onClick={() => {
+                    setOpen(false);
+                    navigate(getUserDestination());
+                  }}
+                  sx={{
+                    borderLeft: "4px solid transparent",
+                    bgcolor: "rgba(255, 215, 0, 0.1)",
+                    "&:hover": { bgcolor: "rgba(255, 215, 0, 0.18)" },
+                  }}
+                >
+                  <ListItemText
+                    primary="Dashboard"
+                    slotProps={{
+                      primary: {
+                        sx: {
+                          color: "#000",
+                          fontWeight: 800,
+                        },
+                      },
+                    }}
+                  />
+                </ListItemButton>
+              </ListItem>
+            )}
             <ListItem disablePadding sx={{ mt: 1 }}>
               <ListItemButton
                 onClick={() => {
                   setOpen(false);
-                  navigate(getUserDestination());
+                  void handleAuthAction();
                 }}
                 sx={{
                   borderLeft: "4px solid transparent",
@@ -201,7 +254,7 @@ const Navbar: React.FC = () => {
                 }}
               >
                 <ListItemText
-                  primary={user ? "Dashboard" : "Login"}
+                  primary={user ? "Logout" : "Login"}
                   slotProps={{
                     primary: {
                       sx: {

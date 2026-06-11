@@ -5,6 +5,10 @@ import {
   Button,
   Chip,
   Container,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Paper,
   ButtonBase,
   Snackbar,
@@ -13,6 +17,7 @@ import {
   Typography,
 } from "@mui/material";
 import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
+import CloseIcon from "@mui/icons-material/Close";
 import LockIcon from "@mui/icons-material/Lock";
 import VerifiedIcon from "@mui/icons-material/Verified";
 import { useNavigate } from "react-router-dom";
@@ -50,6 +55,9 @@ const MagazineScreen: React.FC = () => {
   const [submittingRequest, setSubmittingRequest] = useState(false);
   const [unlockingId, setUnlockingId] = useState("");
   const [selectedMagazineId, setSelectedMagazineId] = useState("");
+  const [readerOpen, setReaderOpen] = useState(false);
+  const [readerTitle, setReaderTitle] = useState("");
+  const [readerUrl, setReaderUrl] = useState("");
 
   useEffect(() => {
     let mounted = true;
@@ -108,7 +116,7 @@ const MagazineScreen: React.FC = () => {
       setNote("");
       setFeedback({
         severity: "success",
-        message: "Your payment proof was submitted. The issue is now awaiting admin approval.",
+        message: `Payment proof submitted. Please contact the admin on ${magazineAdminPhone} / WhatsApp ${magazineAdminWhatsApp} for approval.`,
       });
     } catch (error) {
       setFeedback({
@@ -162,7 +170,20 @@ const MagazineScreen: React.FC = () => {
         throw new Error("This issue does not have a downloadable file yet.");
       }
 
-      window.open(downloadUrl, "_blank", "noopener,noreferrer");
+      const fileResponse = await fetch(downloadUrl);
+      if (!fileResponse.ok) {
+        throw new Error("Unable to download this magazine.");
+      }
+
+      const blob = await fileResponse.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = `${item.title || "magazine"}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
     } catch (error) {
       setFeedback({
         severity: "error",
@@ -174,7 +195,65 @@ const MagazineScreen: React.FC = () => {
   };
 
   const handleReadIssue = async (item: MagazineItem) => {
-    await openDownload(item);
+    if (!item._id) {
+      setFeedback({ severity: "error", message: "This issue does not have a readable file yet." });
+      return;
+    }
+
+    if (!user) {
+      navigate("/login");
+      return;
+    }
+
+    const purchase = getPurchaseForMagazine(item._id);
+    if (purchase?.status !== "approved" && user.role !== "admin") {
+      setFeedback({
+        severity: "error",
+        message: `This issue is locked. After payment, contact the admin on ${magazineAdminPhone} to approve your access.`,
+      });
+      return;
+    }
+
+    setUnlockingId(item._id);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/magazines/${item._id}/download`, {
+        headers: {
+          ...(window.localStorage.getItem("realitylife_admin_token")
+            ? { Authorization: `Bearer ${window.localStorage.getItem("realitylife_admin_token")}` }
+            : {}),
+        },
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.message || payload?.error || "Unable to open this magazine.");
+      }
+
+      const payload = (await response.json()) as { downloadUrl?: string };
+      const downloadUrl = payload.downloadUrl || item.downloadUrl || item.coverImage || item.image;
+
+      if (!downloadUrl) {
+        throw new Error("This issue does not have a readable file yet.");
+      }
+
+      const fileResponse = await fetch(downloadUrl);
+      if (!fileResponse.ok) {
+        throw new Error("Unable to load the magazine preview.");
+      }
+
+      const blob = await fileResponse.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      setReaderTitle(item.title);
+      setReaderUrl(blobUrl);
+      setReaderOpen(true);
+    } catch (error) {
+      setFeedback({
+        severity: "error",
+        message: error instanceof Error ? error.message : "Unable to open this magazine.",
+      });
+    } finally {
+      setUnlockingId("");
+    }
   };
 
   const handleCoverClick = (item: MagazineItem) => {
@@ -441,7 +520,7 @@ const MagazineScreen: React.FC = () => {
                 gridTemplateColumns: {
                   xs: "1fr",
                   sm: "repeat(2, minmax(0, 1fr))",
-                  lg: "repeat(3, minmax(0, 1fr))",
+                  lg: "repeat(4, minmax(0, 1fr))",
                 },
                 gap: 2.25,
               }}
@@ -493,7 +572,7 @@ const MagazineScreen: React.FC = () => {
                           decoding="async"
                           sx={{
                             width: "100%",
-                            aspectRatio: "4 / 5",
+                            aspectRatio: "3 / 4",
                             objectFit: "cover",
                             display: "block",
                           }}
@@ -675,6 +754,66 @@ const MagazineScreen: React.FC = () => {
           {feedback?.message}
         </Alert>
       </Snackbar>
+
+      <Dialog
+        open={readerOpen}
+        onClose={() => {
+          if (readerUrl.startsWith("blob:")) {
+            URL.revokeObjectURL(readerUrl);
+          }
+          setReaderOpen(false);
+          setReaderUrl("");
+          setReaderTitle("");
+        }}
+        fullWidth
+        maxWidth="lg"
+      >
+        <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
+          <Typography sx={{ fontWeight: 900, color: "#171a20" }}>{readerTitle}</Typography>
+          <Button
+            onClick={() => {
+              if (readerUrl.startsWith("blob:")) {
+                URL.revokeObjectURL(readerUrl);
+              }
+              setReaderOpen(false);
+              setReaderUrl("");
+              setReaderTitle("");
+            }}
+            startIcon={<CloseIcon />}
+            sx={{ textTransform: "none", fontWeight: 900 }}
+          >
+            Close
+          </Button>
+        </DialogTitle>
+        <DialogContent sx={{ p: 0, bgcolor: "#0b1220", minHeight: { xs: 420, md: 760 } }}>
+          {readerUrl && (
+            <Box
+              component="iframe"
+              src={readerUrl}
+              title={readerTitle}
+              sx={{ border: 0, width: "100%", height: { xs: 420, md: 760 }, display: "block" }}
+            />
+          )}
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: "space-between", px: 3, py: 2 }}>
+          <Typography sx={{ color: "#667085", fontSize: 13 }}>
+            Read previews the issue. Download saves the PDF locally.
+          </Typography>
+          <Button
+            onClick={() => {
+              if (readerUrl) {
+                const link = document.createElement("a");
+                link.href = readerUrl;
+                link.download = `${readerTitle || "magazine"}.pdf`;
+                link.click();
+              }
+            }}
+            sx={{ textTransform: "none", fontWeight: 900, bgcolor: gold, color: "#120d02" }}
+          >
+            Download this issue
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
