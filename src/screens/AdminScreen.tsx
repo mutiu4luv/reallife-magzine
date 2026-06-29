@@ -861,7 +861,8 @@ const AdminScreen: React.FC = () => {
   );
 
   const handleShareAdminItem = async (item: ShareableAdminItem) => {
-    const itemId = item.kind === "event" ? item.item._id || item.item.id : item.item._id;
+    const shareableItem = item.item as { _id?: string; id?: string };
+    const itemId = shareableItem._id || shareableItem.id;
 
     if (!itemId) {
       setFeedback({ severity: "error", message: "This item needs an id before it can be shared." });
