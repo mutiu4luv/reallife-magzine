@@ -1,15 +1,29 @@
-const API_BASE_URL = process.env.VITE_API_BASE_URL || "https://reallife-magzine-backend.vercel.app";
+const DEPLOYED_API_BASE_URL = "https://reallife-magzine-backend.vercel.app";
+const rawApiBaseUrl = process.env.VITE_API_BASE_URL || process.env.API_BASE_URL || DEPLOYED_API_BASE_URL;
+const API_BASE_URL = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(rawApiBaseUrl)
+  ? DEPLOYED_API_BASE_URL
+  : rawApiBaseUrl.replace(/\/$/, "");
 
 const endpointsByKind = {
   post: ["/api/posts"],
   news: ["/api/news"],
   event: ["/api/upcoming-events", "/api/events"],
+  magazine: ["/api/magazines"],
+  interview: ["/api/interviews"],
+  testimony: ["/api/testimonies"],
+  pastEdition: ["/api/past-editions"],
+  photo: ["/api/photo-gallery"],
 };
 
 const labelsByKind = {
   post: "Article",
   news: "News",
   event: "Event",
+  magazine: "Magazine",
+  interview: "Interview",
+  testimony: "Testimony",
+  pastEdition: "Past Edition",
+  photo: "Gallery",
 };
 
 const escapeHtml = (value = "") =>
@@ -33,15 +47,37 @@ const toExcerpt = (value = "", maxLength = 180) => {
   return `${trimmed || text.slice(0, maxLength).trim()}...`;
 };
 
-const toAbsoluteUrl = (value, origin) => {
+const getFallbackImage = (origin) => `${origin}/hero.jpeg`;
+
+const toAbsoluteImageUrl = (value, origin) => {
   if (!value) {
-    return `${origin}/hero.jpeg`;
+    return getFallbackImage(origin);
+  }
+
+  const raw = String(value).trim();
+
+  if (!raw || raw.startsWith("data:") || raw.startsWith("blob:")) {
+    return getFallbackImage(origin);
   }
 
   try {
-    return new URL(value, origin).toString();
+    const parsed = new URL(raw);
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      return getFallbackImage(origin);
+    }
+
+    if (/^(localhost|127\.0\.0\.1)$/i.test(parsed.hostname)) {
+      return new URL(parsed.pathname, API_BASE_URL).toString();
+    }
+
+    return parsed.toString();
   } catch {
-    return `${origin}/hero.jpeg`;
+    const baseUrl = raw.startsWith("/uploads/") ? API_BASE_URL : origin;
+    try {
+      return new URL(raw, baseUrl).toString();
+    } catch {
+      return getFallbackImage(origin);
+    }
   }
 };
 
@@ -74,6 +110,21 @@ const getBody = (kind, item) => {
     return item.desc || item.description || "";
   }
 
+  if (kind === "magazine") {
+    return item.desc || item.description || "Explore this Reality Life Magazine issue.";
+  }
+
+  if (kind === "interview") {
+    const qaText = Array.isArray(item.qa)
+      ? item.qa.map((entry) => `${entry.question || ""} ${entry.answer || ""}`).join(" ")
+      : "";
+    return item.message || qaText || item.role || "";
+  }
+
+  if (kind === "testimony") {
+    return item.message || "";
+  }
+
   return item.description || item.desc || "";
 };
 
@@ -82,7 +133,33 @@ const getImage = (kind, item) => {
     return Array.isArray(item.images) ? item.images[0] : "";
   }
 
-  return item.image || (Array.isArray(item.images) ? item.images[0] : "");
+  if (kind === "magazine") {
+    return item.coverImage || (Array.isArray(item.images) ? item.images[0] : "") || item.image || "";
+  }
+
+  return (Array.isArray(item.images) ? item.images[0] : "") || item.image || item.coverImage || "";
+};
+
+const getTitle = (kind, item) => {
+  if (kind === "interview" || kind === "testimony") {
+    return item.name || item.title || "Reality Life Magazine";
+  }
+
+  return item.title || item.name || "Reality Life Magazine";
+};
+
+const getPagePath = (kind, id) => {
+  const encodedId = encodeURIComponent(id);
+
+  if (kind === "event") return `/events/${encodedId}`;
+  if (kind === "news") return `/news/${encodedId}`;
+  if (kind === "magazine") return `/magazine/${encodedId}`;
+  if (kind === "interview") return `/interviews/${encodedId}`;
+  if (kind === "testimony") return `/testimonies/${encodedId}`;
+  if (kind === "pastEdition") return `/past-editions/${encodedId}`;
+  if (kind === "photo") return `/gallery/${encodedId}`;
+
+  return `/blog/${encodedId}`;
 };
 
 export default async function handler(req, res) {
@@ -91,10 +168,8 @@ export default async function handler(req, res) {
   const host = req.headers["x-forwarded-host"] || req.headers.host || "";
   const protocol = req.headers["x-forwarded-proto"] || "https";
   const origin = `${protocol}://${host}`;
-  const path =
-    kind === "event" ? `/events/${encodeURIComponent(id)}` : kind === "news" ? `/news/${encodeURIComponent(id)}` : `/blog/${encodeURIComponent(id)}`;
+  const path = getPagePath(kind, id);
   const pageUrl = `${origin}${path}`;
-  const previewUrl = `${origin}/api/share?kind=${encodeURIComponent(kind)}&id=${encodeURIComponent(id)}`;
 
   try {
     if (!id || !endpointsByKind[kind]) {
@@ -103,13 +178,15 @@ export default async function handler(req, res) {
     }
 
     const item = await loadItem(kind, id);
-    const title = item.title || "Reality Life Magazine";
+    const title = getTitle(kind, item);
     const description = toExcerpt(getBody(kind, item)) || "Read the full story on Reality Life Magazine.";
-    const image = toAbsoluteUrl(getImage(kind, item), origin);
+    const image = toAbsoluteImageUrl(getImage(kind, item), origin);
     const label = labelsByKind[kind] || "Article";
 
     res.setHeader("Content-Type", "text/html; charset=utf-8");
-    res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=86400");
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
+    res.setHeader("CDN-Cache-Control", "no-store");
+    res.setHeader("Vercel-CDN-Cache-Control", "no-store");
     res.status(200).send(`<!doctype html>
 <html lang="en">
   <head>
@@ -121,16 +198,18 @@ export default async function handler(req, res) {
     <meta property="og:site_name" content="Reality Life Magazine">
     <meta property="og:title" content="${escapeHtml(title)}">
     <meta property="og:description" content="${escapeHtml(description)}">
-    <meta property="og:url" content="${escapeHtml(previewUrl)}">
+    <meta property="og:url" content="${escapeHtml(pageUrl)}">
     <meta property="og:image" content="${escapeHtml(image)}">
     <meta property="og:image:secure_url" content="${escapeHtml(image)}">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:image:alt" content="${escapeHtml(title)}">
+    <meta itemprop="image" content="${escapeHtml(image)}">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="${escapeHtml(title)}">
     <meta name="twitter:description" content="${escapeHtml(description)}">
     <meta name="twitter:image" content="${escapeHtml(image)}">
+    <meta name="twitter:url" content="${escapeHtml(pageUrl)}">
     <link rel="canonical" href="${escapeHtml(pageUrl)}">
     <script>
       window.setTimeout(function () {

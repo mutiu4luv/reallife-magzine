@@ -19,6 +19,31 @@
         "has": [{ "type": "header", "key": "user-agent", "value": ".*([Bb]ot|facebookexternalhit|Facebot|[Ww]hats[Aa]pp|Slack|Discord|LinkedIn|Telegram|Pinterest|SkypeUriPreview|Twitterbot).*" }],
         "destination": "/api/share?kind=event&id=:id"
       },
+      {
+        "source": "/magazine/:id",
+        "has": [{ "type": "header", "key": "user-agent", "value": ".*([Bb]ot|facebookexternalhit|Facebot|[Ww]hats[Aa]pp|Slack|Discord|LinkedIn|Telegram|Pinterest|SkypeUriPreview|Twitterbot).*" }],
+        "destination": "/api/share?kind=magazine&id=:id"
+      },
+      {
+        "source": "/interviews/:id",
+        "has": [{ "type": "header", "key": "user-agent", "value": ".*([Bb]ot|facebookexternalhit|Facebot|[Ww]hats[Aa]pp|Slack|Discord|LinkedIn|Telegram|Pinterest|SkypeUriPreview|Twitterbot).*" }],
+        "destination": "/api/share?kind=interview&id=:id"
+      },
+      {
+        "source": "/testimonies/:id",
+        "has": [{ "type": "header", "key": "user-agent", "value": ".*([Bb]ot|facebookexternalhit|Facebot|[Ww]hats[Aa]pp|Slack|Discord|LinkedIn|Telegram|Pinterest|SkypeUriPreview|Twitterbot).*" }],
+        "destination": "/api/share?kind=testimony&id=:id"
+      },
+      {
+        "source": "/past-editions/:id",
+        "has": [{ "type": "header", "key": "user-agent", "value": ".*([Bb]ot|facebookexternalhit|Facebot|[Ww]hats[Aa]pp|Slack|Discord|LinkedIn|Telegram|Pinterest|SkypeUriPreview|Twitterbot).*" }],
+        "destination": "/api/share?kind=pastEdition&id=:id"
+      },
+      {
+        "source": "/gallery/:id",
+        "has": [{ "type": "header", "key": "user-agent", "value": ".*([Bb]ot|facebookexternalhit|Facebot|[Ww]hats[Aa]pp|Slack|Discord|LinkedIn|Telegram|Pinterest|SkypeUriPreview|Twitterbot).*" }],
+        "destination": "/api/share?kind=photo&id=:id"
+      },
       { "source": "/(.*)", "destination": "/" }
     ]
   }

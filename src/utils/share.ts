@@ -17,7 +17,7 @@ const getShareUrl = (path: string) => {
 };
 
 const getPreviewSharePath = (path: string) => {
-  const match = path.match(/^\/(blog|news|events)\/([^/?#]+)/);
+  const match = path.match(/^\/(blog|news|events|magazine|interviews|testimonies|past-editions|gallery)\/([^/?#]+)/);
 
   if (!match) {
     return path;
@@ -27,6 +27,11 @@ const getPreviewSharePath = (path: string) => {
     blog: "post",
     news: "news",
     events: "event",
+    magazine: "magazine",
+    interviews: "interview",
+    testimonies: "testimony",
+    "past-editions": "pastEdition",
+    gallery: "photo",
   };
 
   const kind = kindBySection[match[1]];
