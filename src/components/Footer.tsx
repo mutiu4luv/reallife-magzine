@@ -44,7 +44,7 @@ const editorialLinks = [
   { label: "Blog", to: "/blog" },
   { label: "News", to: "/news" },
   { label: "Events", to: "/events" },
-  { label: "KSA @ 80", to: "/king--Sunny-Ade-@80" },
+  { label: "KSA @ 80", to: "/king-sunny-ade-80" },
 ];
 
 const socialLinks = [

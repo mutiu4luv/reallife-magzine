@@ -71,6 +71,7 @@ function App() {
         <Route path="/events" element={<UpcomingEventsScreen />} />
         <Route path="/events/:id" element={<ContentDetailScreen kind="event" />} />
         <Route path="/magazine" element={<MagazineScreen />} />
+        <Route path="/king-sunny-ade-80" element={<KingSunnyAdeCompendiumScreen />} />
         <Route path="/king--Sunny-Ade-@80" element={<KingSunnyAdeCompendiumScreen />} />
         <Route path="/login" element={<AuthScreen mode="login" />} />
         <Route path="/register" element={<AuthScreen mode="register" />} />

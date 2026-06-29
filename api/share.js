@@ -28,7 +28,7 @@ const labelsByKind = {
 
 const staticPreviewsByKind = {
   kingSunnyAde: {
-    path: "/king--Sunny-Ade-@80",
+    path: "/king-sunny-ade-80",
     title: "King Sunny Ade @ 80 - Commemorative Compendium",
     description:
       "Eight decades of grace, rhythm, and legacy. Share your goodwill message, congratulatory note, tribute, or fan interview for the official commemorative compendium.",

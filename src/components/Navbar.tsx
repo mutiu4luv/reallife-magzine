@@ -26,7 +26,7 @@ const navLinks = [
   { label: "Magazine", path: "/magazine" },
   { label: "News", path: "/news" },
   { label: "Events", path: "/events" },
-  { label: "KSA@80", path: "/king--Sunny-Ade-@80" },
+  { label: "KSA@80", path: "/king-sunny-ade-80" },
 ];
 
 const Navbar: React.FC = () => {

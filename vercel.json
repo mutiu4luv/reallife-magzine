@@ -1,4 +1,11 @@
 {
+    "redirects": [
+      {
+        "source": "/king--Sunny-Ade-@80",
+        "destination": "/king-sunny-ade-80",
+        "permanent": false
+      }
+    ],
     "rewrites": [
       {
         "source": "/api/share",
@@ -45,7 +52,7 @@
         "destination": "/api/share?kind=photo&id=:id"
       },
       {
-        "source": "/king--Sunny-Ade-@80",
+        "source": "/king-sunny-ade-80",
         "has": [{ "type": "header", "key": "user-agent", "value": ".*([Bb]ot|facebookexternalhit|Facebot|[Ww]hats[Aa]pp|Slack|Discord|LinkedIn|Telegram|Pinterest|SkypeUriPreview|Twitterbot).*" }],
         "destination": "/api/share?kind=kingSunnyAde"
       },
