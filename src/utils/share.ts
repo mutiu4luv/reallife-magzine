@@ -17,6 +17,10 @@ const getShareUrl = (path: string) => {
 };
 
 const getPreviewSharePath = (path: string) => {
+  if (path.match(/^\/king--Sunny-Ade-@80(?:[/?#]|$)/)) {
+    return "/api/share?kind=kingSunnyAde";
+  }
+
   const match = path.match(/^\/(blog|news|events|magazine|interviews|testimonies|past-editions|gallery)\/([^/?#]+)/);
 
   if (!match) {

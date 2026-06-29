@@ -26,6 +26,17 @@ const labelsByKind = {
   photo: "Gallery",
 };
 
+const staticPreviewsByKind = {
+  kingSunnyAde: {
+    path: "/king--Sunny-Ade-@80",
+    title: "King Sunny Ade @ 80 - Commemorative Compendium",
+    description:
+      "Eight decades of grace, rhythm, and legacy. Share your goodwill message, congratulatory note, tribute, or fan interview for the official commemorative compendium.",
+    image: "/king.jpeg",
+    label: "Commemorative Compendium",
+  },
+};
+
 const escapeHtml = (value = "") =>
   String(value)
     .replace(/&/g, "&amp;")
@@ -149,6 +160,10 @@ const getTitle = (kind, item) => {
 };
 
 const getPagePath = (kind, id) => {
+  if (staticPreviewsByKind[kind]) {
+    return staticPreviewsByKind[kind].path;
+  }
+
   const encodedId = encodeURIComponent(id);
 
   if (kind === "event") return `/events/${encodedId}`;
@@ -172,6 +187,60 @@ export default async function handler(req, res) {
   const pageUrl = `${origin}${path}`;
 
   try {
+    const staticPreview = staticPreviewsByKind[kind];
+
+    if (staticPreview) {
+      const title = staticPreview.title;
+      const description = staticPreview.description;
+      const image = toAbsoluteImageUrl(staticPreview.image, origin);
+      const label = staticPreview.label;
+
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
+      res.setHeader("CDN-Cache-Control", "no-store");
+      res.setHeader("Vercel-CDN-Cache-Control", "no-store");
+      res.status(200).send(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${escapeHtml(title)}</title>
+    <meta name="description" content="${escapeHtml(description)}">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="Reality Life Magazine">
+    <meta property="og:title" content="${escapeHtml(title)}">
+    <meta property="og:description" content="${escapeHtml(description)}">
+    <meta property="og:url" content="${escapeHtml(pageUrl)}">
+    <meta property="og:image" content="${escapeHtml(image)}">
+    <meta property="og:image:secure_url" content="${escapeHtml(image)}">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="${escapeHtml(title)}">
+    <meta itemprop="image" content="${escapeHtml(image)}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="${escapeHtml(title)}">
+    <meta name="twitter:description" content="${escapeHtml(description)}">
+    <meta name="twitter:image" content="${escapeHtml(image)}">
+    <meta name="twitter:url" content="${escapeHtml(pageUrl)}">
+    <link rel="canonical" href="${escapeHtml(pageUrl)}">
+    <script>
+      window.setTimeout(function () {
+        window.location.replace(${JSON.stringify(pageUrl)});
+      }, 400);
+    </script>
+  </head>
+  <body>
+    <main>
+      <h1>${escapeHtml(title)}</h1>
+      <p>${escapeHtml(label)}</p>
+      <p>${escapeHtml(description)}</p>
+      <p><a href="${escapeHtml(`${pageUrl}#top`)}">Open page</a></p>
+    </main>
+  </body>
+</html>`);
+      return;
+    }
+
     if (!id || !endpointsByKind[kind]) {
       res.status(404).send("Preview not found.");
       return;
