@@ -32,7 +32,7 @@ const staticPreviewsByKind = {
     title: "King Sunny Ade @ 80 - Commemorative Compendium",
     description:
       "Eight decades of grace, rhythm, and legacy. Share your goodwill message, congratulatory note, tribute, or fan interview for the official commemorative compendium.",
-    image: "/king.jpeg",
+    image: "/king-og.jpg",
     label: "Commemorative Compendium",
   },
 };
